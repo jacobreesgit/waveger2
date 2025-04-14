@@ -1,7 +1,8 @@
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request
 import requests
 import os
 from dotenv import load_dotenv
+from cache_extension import cache
 
 # Load API key
 load_dotenv()
@@ -23,14 +24,11 @@ def get_chart():
     # Try to get from cache for current charts
     data = None
     if not week and not refresh:
-        cache = current_app.extensions.get('cache')
         cache_key = f"billboard:{chart_id}"
-        
-        if cache:
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                data = cached_data
-                from_cache = True
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            data = cached_data
+            from_cache = True
     
     # If not in cache, make API request
     if data is None:
@@ -52,10 +50,8 @@ def get_chart():
             
             # Cache current chart data
             if not week and not refresh:
-                cache = current_app.extensions.get('cache')
-                if cache:
-                    cache_key = f"billboard:{chart_id}"
-                    cache.set(cache_key, data, timeout=3600)
+                cache_key = f"billboard:{chart_id}"
+                cache.set(cache_key, data, timeout=3600)
         except Exception as e:
             return jsonify({"error": str(e), "cached": False}), 500
     
