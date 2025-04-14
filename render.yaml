@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: waveger-api
+    runtime: python
+    plan: standard
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: RAPID_API_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.9.18

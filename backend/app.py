@@ -1,5 +1,6 @@
 from flask import Flask
 from blueprints.billboard_api import billboard_bp
+import os
 
 # Create app
 app = Flask(__name__)
