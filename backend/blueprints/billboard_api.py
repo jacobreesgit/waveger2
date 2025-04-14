@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 import requests
 import os
 from dotenv import load_dotenv
@@ -12,26 +12,54 @@ billboard_bp = Blueprint('billboard', __name__, url_prefix='')
 
 @billboard_bp.route('/billboard_api.php')
 def get_chart():
-    # Get query parameters with default for id
+    # Get query parameters with defaults set
     chart_id = request.args.get('id', 'hot-100')
     week = request.args.get('week')
+    refresh = request.args.get('refresh', 'false').lower() == 'true'
     
-    # Build API URL with parameters
-    url = "https://billboard-charts-api.p.rapidapi.com/chart.php"
-    params = {'id': chart_id}
+    # Initialise with default value - assuming data will come from API
+    from_cache = False
     
-    # Add optional week parameter if provided
-    if week:
-        params['week'] = week
+    # Try to get from cache for current charts
+    data = None
+    if not week and not refresh:
+        cache = current_app.extensions.get('cache')
+        cache_key = f"billboard:{chart_id}"
+        
+        if cache:
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                data = cached_data
+                from_cache = True
     
-    # Set up headers
-    headers = {
-        "X-RapidAPI-Key": api_key,
-        "X-RapidAPI-Host": "billboard-charts-api.p.rapidapi.com"
-    }
+    # If not in cache, make API request
+    if data is None:
+        # Build API request
+        url = "https://billboard-charts-api.p.rapidapi.com/chart.php"
+        params = {'id': chart_id}
+        if week:
+            params['week'] = week
+        
+        headers = {
+            "X-RapidAPI-Key": api_key,
+            "X-RapidAPI-Host": "billboard-charts-api.p.rapidapi.com"
+        }
+        
+        # Make API request
+        try:
+            response = requests.get(url, headers=headers, params=params)
+            data = response.json()
+            
+            # Cache current chart data
+            if not week and not refresh:
+                cache = current_app.extensions.get('cache')
+                if cache:
+                    cache_key = f"billboard:{chart_id}"
+                    cache.set(cache_key, data, timeout=3600)
+        except Exception as e:
+            return jsonify({"error": str(e), "cached": False}), 500
     
-    # Make API request
-    response = requests.get(url, headers=headers, params=params)
+    # Add the cache status flag to the original data
+    data["cached"] = from_cache
     
-    # Return JSON response
-    return jsonify(response.json())
+    return jsonify(data)
