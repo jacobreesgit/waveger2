@@ -1,3 +1,9 @@
+# Documentation
+README.md
+
+# Dependency management
+package-lock.json
+
 # Environment variables
 .env
 .env.*
@@ -33,11 +39,29 @@ venv/
 ENV/
 env/
 
+# Node.js and Frontend
+node_modules
+dist
+dist-ssr
+*.local
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
 # IDE
 .idea/
-.vscode/
+.vscode/*
+!.vscode/extensions.json
 *.swp
 *.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
 
 # OS specific
 .DS_Store
