@@ -23,16 +23,32 @@ This service works as the backend API for the Waveger music application, providi
 ## ✨ Features
 
 - Access to Billboard music charts data (Hot-100, Billboard 200, etc.)
-- Historical data access by specifying a week
-- Redis caching for improved performance
-- Ability to force-refresh cached data
+- Historical data access by specifying a week parameter
+- Smart caching strategy:
+  - Current charts checked for updates every Tuesday
+  - Hourly rechecking on Tuesdays until new data appears
+  - Fallback to cached data during API outages
+  - Current charts cached for 1 week
+  - Historical charts cached permanently
+- Option to force-refresh data anytime
 
 ## 🛠️ Technologies Used
 
-- **Backend**: Flask (Python)
+- **Backend**: Flask (Python) with application factory pattern
 - **Caching**: Redis via Flask-Caching
 - **Data Source**: Billboard Charts API on RapidAPI
 - **Deployment**: Render
+
+## 🏗️ Project Structure
+
+```
+backend/
+  ├── app.py                # Application entry point with app factory
+  ├── cache_extension.py    # Shared cache instance
+  ├── requirements.txt      # Python dependencies
+  └── blueprints/
+      └── billboard_api.py  # Billboard API routes and logic
+```
 
 ## 📚 API Documentation
 
@@ -44,11 +60,11 @@ Retrieves data for a specified Billboard chart.
 
 **Query Parameters:**
 
-| Parameter | Required | Default   | Description                                                            |
-| --------- | -------- | --------- | ---------------------------------------------------------------------- |
-| `id`      | No       | `hot-100` | The Billboard chart ID to retrieve data for                            |
-| `week`    | No       | None      | A specific date to retrieve historical chart data (format: YYYY-MM-DD) |
-| `refresh` | No       | `false`   | Force refresh the cache for current charts (`true` or `false`)         |
+| Parameter | Required | Default   | Description                                                                                                                                                                                        |
+| --------- | -------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`      | No       | `hot-100` | The Billboard chart ID to retrieve data for                                                                                                                                                        |
+| `week`    | No       | None      | A specific date to retrieve historical chart data (format: YYYY-MM-DD)                                                                                                                             |
+| `refresh` | No       | `false`   | Force refresh the cache for current charts (`true` or `false`). Note: Current charts automatically refresh on Tuesdays regardless of this parameter. Historical data is always cached permanently. |
 
 **Example Requests:**
 
