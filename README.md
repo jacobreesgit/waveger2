@@ -31,6 +31,11 @@ This service works as the backend API for the Waveger music application, providi
   - Current charts cached for 1 week
   - Historical charts cached permanently
 - Option to force-refresh data anytime
+- Robust error handling:
+  - Smart detection and management of API rate limits
+  - Automatic fallback to cached data during API downtime
+  - Clear informative error messages
+  - 10-second timeout prevention for hanging requests
 
 ## 🛠️ Technologies Used
 
@@ -110,6 +115,21 @@ GET https://waveger-api.onrender.com/billboard_api.php?id=hot-100&refresh=true
 }
 ```
 
+During API issues, responses may include an additional field:
+
+```json
+{
+  "chart": {
+    /* chart data */
+  },
+  "entries": [
+    /* chart entries */
+  ],
+  "cached": true,
+  "note": "API rate limit exceeded, serving cached data"
+}
+```
+
 **Response Fields:**
 
 - `chart`: Information about the chart
@@ -124,6 +144,7 @@ GET https://waveger-api.onrender.com/billboard_api.php?id=hot-100&refresh=true
   - `peak_position`: Highest position achieved on the chart
   - `weeks_on_chart`: Number of weeks the entry has been on the chart
 - `cached`: Boolean indicating whether the response was served from cache
+- `note`: (Optional) Explanation when serving cached data due to API issues
 
 **Note:** The exact fields returned may vary depending on the Billboard API response.
 
@@ -154,10 +175,19 @@ Additional charts may be available through the API. The `id` parameter in your A
 
 If you encounter issues with the API:
 
-1. **API Unavailable**: Check if there are any ongoing maintenance or server issues with the deployment.
+1. **API Unavailable**: The service will automatically fall back to cached data if the Billboard API is experiencing downtime. Look for the `note` field in the response for details.
 
-2. **Rate Limiting**: There may be rate limits imposed by the underlying Billboard Charts API.
+2. **Rate Limiting**: If you receive responses with a note about rate limiting, this means the upstream Billboard API has temporarily limited our requests. The system will automatically:
+
+   - Serve cached data during the rate-limited period
+   - Implement a 5-minute cooldown before trying the API again
+   - Resume normal operations once the rate limit period expires
 
 3. **Missing or Incomplete Data**: Billboard occasionally updates their chart structure, which may affect response formats.
+
+4. **Error Response Codes**:
+   - `503`: Service Unavailable - Indicates the Billboard API is unavailable or rate limited
+   - `500`: Internal Server Error - Unexpected errors in processing
+   - `504`: Gateway Timeout - Request to Billboard API timed out
 
 For any persistent issues, please report them to the API maintainer.
