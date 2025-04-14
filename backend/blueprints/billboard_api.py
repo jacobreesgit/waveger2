@@ -1,9 +1,14 @@
 from flask import Blueprint, jsonify, request
 import requests
 import os
+import logging
 from dotenv import load_dotenv
 from cache_extension import cache
 from datetime import datetime
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Load API key
 load_dotenv()
@@ -14,6 +19,7 @@ billboard_bp = Blueprint('billboard', __name__, url_prefix='')
 
 ONE_HOUR = 3600
 ONE_WEEK = 604800
+RATE_LIMIT_TIMEOUT = 300  # 5 minutes
 
 @billboard_bp.route('/billboard_api.php')
 def get_chart():
@@ -28,16 +34,17 @@ def get_chart():
     # Get cached data
     cached_data = cache.get(cache_key)
     
-    # Historical data is simple - always serve from cache if available
-    if week and cached_data and not refresh:
-        return jsonify({**cached_data, "cached": True})
-    
-    # For current charts, check if we need fresh data
-    if not week and cached_data and not refresh:
-        # On Tuesdays, we might need to check for updates
-        is_tuesday = datetime.now().weekday() == 1
-        if not is_tuesday:
-            return jsonify({**cached_data, "cached": True})
+    # Don't hit the API if:
+    # 1. We have historical data cached (and no refresh requested)
+    # 2. It's not Tuesday and we have current data cached (and no refresh requested)
+    # 3. We're currently rate limited and have cached data
+    if not refresh and cached_data and (
+        week or 
+        (not week and datetime.now().weekday() != 1) or
+        cache.get("billboard:rate_limited")
+    ):
+        note = "API rate limited, serving cached data" if cache.get("billboard:rate_limited") else None
+        return jsonify({**cached_data, "cached": True, "note": note} if note else {**cached_data, "cached": True})
     
     # If we got here, we need to fetch from API
     url = "https://billboard-charts-api.p.rapidapi.com/chart.php"
@@ -50,16 +57,16 @@ def get_chart():
         params['week'] = week
     
     try:
-        response = requests.get(url, headers=headers, params=params)
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response.raise_for_status()  # Raises exception for 4XX/5XX responses
         new_data = response.json()
         
-        # Handle API errors
+        # Check if API returned an error in its response
         if not isinstance(new_data, dict) or "error" in new_data:
-            # Return cached data if available, otherwise return error
-            if cached_data:
-                return jsonify({**cached_data, "cached": True, 
-                              "note": "API error, serving cached data"})
-            return jsonify({"error": "API error", "cached": False}), 500
+            raise Exception(new_data.get("error", "Invalid API response") if isinstance(new_data, dict) else "Invalid response format")
+        
+        # Clear rate limit flag if request was successful
+        cache.delete("billboard:rate_limited")
         
         # For historical data - cache permanently
         if week:
@@ -67,23 +74,44 @@ def get_chart():
             return jsonify({**new_data, "cached": False})
         
         # For current charts - check if data changed (only on Tuesdays)
-        is_tuesday = datetime.now().weekday() == 1
-        
-        if is_tuesday and cached_data:
-            # Simple change detection - check the chart date
+        if datetime.now().weekday() == 1 and cached_data:
             if new_data.get("chart", {}).get("date") == cached_data.get("chart", {}).get("date"):
                 # Data hasn't changed, check again in an hour
                 cache.set(cache_key, cached_data, timeout=ONE_HOUR)
-                return jsonify({**cached_data, "cached": True, 
-                              "note": "No new chart data yet"})
+                return jsonify({**cached_data, "cached": True, "note": "No new chart data yet"})
         
         # New or changed data - cache for a week
         cache.set(cache_key, new_data, timeout=ONE_WEEK)
         return jsonify({**new_data, "cached": False})
         
-    except Exception as e:
-        # Return cached data if available, otherwise return error
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"HTTP Error: {e}")
+        
+        # Handle rate limiting specifically
+        if response.status_code == 429:
+            cache.set("billboard:rate_limited", True, timeout=RATE_LIMIT_TIMEOUT)
+            message = "API rate limit exceeded"
+        else:
+            message = f"API error: Status code {response.status_code}"
+            
+        # Fall back to cached data if available
         if cached_data:
-            return jsonify({**cached_data, "cached": True, 
-                          "note": f"API error: {str(e)}, serving cached data"})
+            return jsonify({**cached_data, "cached": True, "note": f"{message}, serving cached data"})
+        return jsonify({"error": message, "cached": False, "status_code": response.status_code}), 503
+        
+    except (requests.exceptions.RequestException, ValueError) as e:
+        # Handles connection, timeout, and JSON parsing errors
+        error_type = "Timeout" if isinstance(e, requests.exceptions.Timeout) else "API error"
+        logger.error(f"{error_type}: {str(e)}")
+        
+        if cached_data:
+            return jsonify({**cached_data, "cached": True, "note": f"{error_type}: {str(e)}, serving cached data"})
+        return jsonify({"error": f"{error_type}: {str(e)}", "cached": False}), 503
+        
+    except Exception as e:
+        # Catch-all for any other errors
+        logger.error(f"Unexpected error: {str(e)}")
+        
+        if cached_data:
+            return jsonify({**cached_data, "cached": True, "note": f"Unexpected error, serving cached data"})
         return jsonify({"error": str(e), "cached": False}), 500
