@@ -102,16 +102,18 @@ def get_chart():
     except (requests.exceptions.RequestException, ValueError) as e:
         # Handles connection, timeout, and JSON parsing errors
         error_type = "Timeout" if isinstance(e, requests.exceptions.Timeout) else "API error"
-        logger.error(f"{error_type}: {str(e)}")
+        error_message = str(e)
+        logger.error(f"{error_type}: {error_message}")
         
         if cached_data:
-            return jsonify({**cached_data, "cached": True, "note": f"{error_type}: {str(e)}, serving cached data"})
-        return jsonify({"error": f"{error_type}: {str(e)}", "cached": False}), 503
+            return jsonify({**cached_data, "cached": True, "note": f"{error_type}: {error_message}, serving cached data"})
+        return jsonify({"error": f"{error_type}: {error_message}", "cached": False}), 503
         
     except Exception as e:
         # Catch-all for any other errors
-        logger.error(f"Unexpected error: {str(e)}")
+        error_message = str(e)
+        logger.error(f"Unexpected error: {error_message}")
         
         if cached_data:
-            return jsonify({**cached_data, "cached": True, "note": f"Unexpected error, serving cached data"})
-        return jsonify({"error": str(e), "cached": False}), 500
+            return jsonify({**cached_data, "cached": True, "note": f"{error_message}, serving cached data"})
+        return jsonify({"error": error_message, "cached": False}), 503
