@@ -8,9 +8,9 @@ load_dotenv()
 api_key = os.getenv("RAPID_API_KEY")
 
 # Create blueprint with prefix
-billboard_bp = Blueprint('billboard', __name__, url_prefix='/billboard_api')
+billboard_bp = Blueprint('billboard', __name__, url_prefix='')
 
-@billboard_bp.route('/chart.php')
+@billboard_bp.route('/billboard_api.php')
 def get_chart():
     # Get query parameters with default for id
     chart_id = request.args.get('id', 'hot-100')
