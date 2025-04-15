@@ -90,14 +90,14 @@ class AppleMusicService:
         Search Apple Music for a song by title and artist.
         
         Creates a cache key based on title and artist to avoid repeated API calls.
-        Returns basic song information including preview URL and artwork.
+        Returns all available song information from Apple Music.
         
         Args:
             title (str): The song title to search for
             artist (str): The artist name to search for
             
         Returns:
-            dict: Song details including ID, URL, preview URL, and artwork URL, or None if not found
+            dict: Complete song details from Apple Music API, or None if not found
         """
         # Create a cache key using both title and artist to ensure uniqueness
         cache_key = f"apple_music:search:{title}:{artist}"
@@ -112,17 +112,17 @@ class AppleMusicService:
             
         try:
             # Use requests' params argument to properly handle URL encoding
-            # Let the requests library handle parameter encoding
             url = "https://api.music.apple.com/v1/catalog/us/search"
             headers = {"Authorization": f"Bearer {token}"}
             
-            # Combine title and artist, optionally replace ampersands for better search results
+            # Combine title and artist for search
             search_term = f"{title} {artist}"
             
             params = {
                 'term': search_term,
                 'types': 'songs',
-                'limit': 1
+                'limit': 1,
+                'include': 'artists,albums,playlists'  # Include all related resources
             }
             
             # Make the API request with a timeout to prevent hanging
@@ -130,21 +130,27 @@ class AppleMusicService:
             response.raise_for_status()
             data = response.json()
             
-            # Extract relevant song information from the response
+            # Extract the full song data from the response
             result = None
             if data.get("results", {}).get("songs", {}).get("data"):
+                # Return the complete song object with all data from Apple Music
                 song = data["results"]["songs"]["data"][0]
-                result = {
-                    "id": song["id"],
-                    "url": song["attributes"]["url"],
-                    "preview_url": song["attributes"].get("previews", [{}])[0].get("url") if song["attributes"].get("previews") else None,
-                    "artwork_url": song["attributes"].get("artwork", {}).get("url", "").replace("{w}", "1000").replace("{h}", "1000")
-                }
+                
+                # Process artwork URL for direct usage (replace placeholders)
+                if song.get("attributes", {}).get("artwork", {}).get("url"):
+                    song["attributes"]["artwork"]["url"] = song["attributes"]["artwork"]["url"].replace("{w}", "1000").replace("{h}", "1000")
+                
+                # Process preview URL for easier access
+                if song.get("attributes", {}).get("previews"):
+                    song["preview_url"] = song["attributes"]["previews"][0].get("url")
+                
+                # Return the entire song object with all available data
+                result = song
             
             # Cache results for 24 hours - including null results to prevent repeated failed lookups
             cache.set(cache_key, result, timeout=24*60*60)
             return result
-            
+                
         except Exception as e:
             logger.error(f"Error searching Apple Music: {e}")
             # Cache failures briefly to prevent immediate retries
@@ -157,7 +163,7 @@ class AppleMusicService:
         Add Apple Music data to chart entries in parallel.
         
         Processes songs in batch using a thread pool to avoid slowing down the response.
-        Only processes songs that don't already have Apple Music data to avoid redundant API calls.
+        Attaches complete Apple Music song data to each chart entry.
         
         Args:
             data (dict): Billboard chart data to enrich
@@ -178,13 +184,8 @@ class AppleMusicService:
             # Unknown structure
             return data
             
-        # Skip processing if songs already have Apple Music data
-        if songs and "apple_music" in songs[0]:
-            return data
-            
         # Process songs in parallel (max 5 workers to avoid overwhelming)
-        # Only process songs that don't already have Apple Music data
-        songs_to_process = [s for s in songs if "apple_music" not in s]
+        songs_to_process = songs
         
         if not songs_to_process:
             return data
