@@ -399,11 +399,16 @@ function getPositionBadgeColor(position: number) {
                       <div
                         class="inner-circle flex items-center justify-center"
                       >
-                        <span
+                        <font-awesome-icon
                           v-if="playingTrackId === song.position"
-                          class="pi pi-pause-circle"
-                        ></span>
-                        <span v-else class="pi pi-play-circle"></span>
+                          :icon="['fas', 'pause']"
+                          size="lg"
+                        />
+                        <font-awesome-icon
+                          v-else
+                          :icon="['fas', 'play']"
+                          size="lg"
+                        />
                       </div>
                     </div>
                   </div>

@@ -10,6 +10,7 @@ import CustomPreset from "@/theme/customPreset";
 import ToastService from "primevue/toastservice";
 
 import "primeicons/primeicons.css";
+import { FontAwesomeIcon } from "@/plugins/fontawesome";
 
 const app = createApp(App);
 app.use(createPinia());
@@ -20,4 +21,5 @@ app.use(PrimeVue, {
   },
 });
 app.use(ToastService);
+app.component("font-awesome-icon", FontAwesomeIcon);
 app.mount("#app");
