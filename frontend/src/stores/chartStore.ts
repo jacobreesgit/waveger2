@@ -66,7 +66,7 @@ export const useChartStore = defineStore("chart", {
         const response = await axios.get(`${baseUrl}/billboard_api.php`, {
           params,
         });
-
+        console.log("Fetched chart data:", response);
         this.chartData = response.data;
       } catch (error) {
         console.error("Error fetching chart data:", error);
