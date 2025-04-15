@@ -1,6 +1,4 @@
-<script setup lang="ts">
-import ChartView from "./components/ChartView.vue";
-</script>
+<script setup lang="ts"></script>
 
 <template>
   <div class="app-container flex flex-col min-h-screen">
@@ -15,10 +13,9 @@ import ChartView from "./components/ChartView.vue";
         size="large"
         class="app-container__main-content__loading-spinner h-[unset]"
       /> -->
-      <!-- <RouterView
+      <RouterView
         class="app-container__main-content__content flex flex-col w-full items-center p-4"
-        v-else
-      /> -->
+      />
       <ChartView />
     </main>
   </div>

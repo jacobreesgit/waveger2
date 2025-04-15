@@ -14,6 +14,7 @@ export interface Song {
     artwork_url: string;
     preview_url: string | null;
     url: string;
+    id?: string;
   } | null;
   url: string;
 }
@@ -21,7 +22,7 @@ export interface Song {
 export interface ChartData {
   cached: boolean;
   info: string;
-  note: string;
+  note?: string;
   songs: Song[];
   title: string;
   week: string;
@@ -36,7 +37,7 @@ export const useChartStore = defineStore("chart", {
   }),
 
   actions: {
-    async fetchChart(id = "hot-100") {
+    async fetchChart(id = "hot-100", week?: string, refresh = false) {
       this.isLoading = true;
       this.error = null;
       this.chartId = id;
@@ -47,8 +48,23 @@ export const useChartStore = defineStore("chart", {
           ? "/api"
           : "https://waveger-api.onrender.com";
 
+        // Prepare query parameters
+        const params: Record<string, string | boolean> = {
+          id: this.chartId,
+        };
+
+        // Add week parameter if provided
+        if (week) {
+          params.week = week;
+        }
+
+        // Add refresh parameter if true
+        if (refresh) {
+          params.refresh = true;
+        }
+
         const response = await axios.get(`${baseUrl}/billboard_api.php`, {
-          params: { id: this.chartId },
+          params,
         });
 
         this.chartData = response.data;

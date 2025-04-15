@@ -1,22 +1,87 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { useChartStore } from "../stores/chartStore";
 
 const chartStore = useChartStore();
+const selectedDate = ref<string>("");
+const refreshCache = ref<boolean>(false);
+
+// All available chart options from the API documentation
 const chartOptions = [
-  { id: "hot-100", name: "Hot 100" },
-  { id: "billboard-200", name: "Billboard 200" },
-  { id: "artist-100", name: "Artist 100" },
+  { id: "hot-100", name: "Billboard Hot 100™" },
+  { id: "billboard-200", name: "Billboard 200™" },
+  { id: "artist-100", name: "Billboard Artist 100" },
+  { id: "emerging-artists", name: "Emerging Artists" },
   { id: "streaming-songs", name: "Streaming Songs" },
+  { id: "radio-songs", name: "Radio Songs" },
+  { id: "digital-song-sales", name: "Digital Song Sales" },
+  { id: "summer-songs", name: "Songs of the Summer" },
+  { id: "top-album-sales", name: "Top Album Sales" },
+  { id: "top-streaming-albums", name: "Top Streaming Albums" },
+  { id: "independent-albums", name: "Independent Albums" },
+  { id: "vinyl-albums", name: "Vinyl Albums" },
+  { id: "indie-store-album-sales", name: "Indie Store Album Sales" },
+  {
+    id: "billboard-u-s-afrobeats-songs",
+    name: "Billboard U.S. Afrobeats Songs",
+  },
 ];
 
 const currentAudio = ref<HTMLAudioElement | null>(null);
 const playingTrackId = ref<number | null>(null);
 
+// Watch for changes to selectedDate or refreshCache and update the chart
+watch([selectedDate, refreshCache], () => {
+  fetchCurrentChart();
+});
+
 // Fetch chart data when component mounts
 onMounted(() => {
-  chartStore.fetchChart();
+  fetchCurrentChart();
 });
+
+// Fetch the current chart with options
+function fetchCurrentChart() {
+  chartStore.fetchChart(
+    chartStore.chartId,
+    selectedDate.value,
+    refreshCache.value
+  );
+
+  // Reset refresh cache flag after fetching
+  if (refreshCache.value) {
+    refreshCache.value = false;
+  }
+}
+
+// Handle chart selection change
+function onChartChange() {
+  fetchCurrentChart();
+}
+
+// Handle date reset
+function resetDate() {
+  selectedDate.value = "";
+  fetchCurrentChart();
+}
+
+// Format date for display
+function formatDate(dateString: string): string {
+  if (!dateString) return "Current";
+
+  const date = new Date(dateString);
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+// Get today's date in YYYY-MM-DD format for max date attribute
+function getToday(): string {
+  const today = new Date();
+  return today.toISOString().split("T")[0];
+}
 
 // Play preview if available
 function playPreview(previewUrl: string | null, position: number) {
@@ -50,7 +115,7 @@ function formatPositionChange(
   current: number,
   last: number | undefined
 ): string {
-  if (last === undefined) return "NEW";
+  if (last === undefined || last === 0) return "NEW";
 
   const diff = last - current;
   if (diff === 0) return "=";
@@ -61,7 +126,7 @@ function getPositionChangeClass(
   current: number,
   last: number | undefined
 ): string {
-  if (last === undefined) return "text-blue-500";
+  if (last === undefined || last === 0) return "text-blue-500";
 
   const diff = last - current;
   if (diff === 0) return "text-gray-500";
@@ -71,30 +136,59 @@ function getPositionChangeClass(
 
 <template>
   <div class="container mx-auto px-4 py-6">
-    <!-- Chart selector -->
-    <div class="mb-6 flex items-center">
-      <select
-        v-model="chartStore.chartId"
-        @change="chartStore.changeChart(chartStore.chartId)"
-        class="rounded-lg border shadow-sm p-2 bg-white text-gray-800"
-      >
-        <option v-for="chart in chartOptions" :key="chart.id" :value="chart.id">
-          {{ chart.name }}
-        </option>
-      </select>
+    <!-- Controls section -->
+    <div class="bg-white p-4 rounded-lg shadow mb-6">
+      <h2 class="text-xl font-semibold mb-4">Chart Options</h2>
 
-      <div
-        v-if="chartStore.chartData?.cached"
-        class="ml-3 text-sm text-gray-500"
-      >
-        Using cached data
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Chart selector -->
+        <div>
+          <label
+            for="chart-select"
+            class="block text-sm font-medium text-gray-700 mb-1"
+            >Select Chart</label
+          >
+          <select
+            id="chart-select"
+            v-model="chartStore.chartId"
+            @change="onChartChange"
+            class="w-full rounded-lg border shadow-sm p-2 bg-white text-gray-800"
+          >
+            <option
+              v-for="chart in chartOptions"
+              :key="chart.id"
+              :value="chart.id"
+            >
+              {{ chart.name }}
+            </option>
+          </select>
+        </div>
+
+        <!-- Date picker -->
+        <div>
+          <label
+            for="date-picker"
+            class="block text-sm font-medium text-gray-700 mb-1"
+            >Select Date</label
+          >
+          <div class="flex">
+            <input
+              id="date-picker"
+              type="date"
+              v-model="selectedDate"
+              :max="getToday()"
+              class="flex-1 rounded-lg border shadow-sm p-2 bg-white text-gray-800"
+              placeholder="YYYY-MM-DD"
+            />
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- Loading state -->
     <div v-if="chartStore.isLoading" class="text-center py-8">
       <div
-        class="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"
+        class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"
       ></div>
       <p class="mt-4">Loading chart data...</p>
     </div>
@@ -167,6 +261,29 @@ function getPositionChangeClass(
                 {{ song.name }}
               </h3>
               <p class="text-gray-600 truncate">{{ song.artist }}</p>
+
+              <!-- Apple Music Link -->
+              <a
+                v-if="song.apple_music?.url"
+                :href="song.apple_music.url"
+                target="_blank"
+                class="text-xs text-blue-600 hover:underline inline-flex items-center mt-1"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-3 w-3 mr-1"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"
+                  />
+                  <path
+                    d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"
+                  />
+                </svg>
+                Apple Music
+              </a>
             </div>
 
             <!-- Preview button -->
@@ -179,6 +296,7 @@ function getPositionChangeClass(
                   ? 'bg-blue-100 text-blue-600'
                   : 'bg-gray-100'
               "
+              title="Play 30-second preview"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
