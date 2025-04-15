@@ -190,13 +190,12 @@ function getAudioInfo(position: number) {
           @mouseenter="toggleFlip(song.position)"
           @mouseleave="toggleFlip(song.position)"
         >
-          <!-- Fixed height container using CSS Custom Properties -->
           <div
             class="card-wrapper"
             :style="{ '--min-card-height': `${maxCardHeight}px` }"
           >
             <transition name="p-flip" mode="out-in">
-              <!-- Front card - Note the card-front class for height measurement -->
+              <!-- Front card -->
               <div
                 v-if="!flippedCards[song.position]"
                 class="card-face overflow-hidden card-front bg-white rounded-lg shadow-md flex flex-col"
@@ -396,7 +395,6 @@ function getAudioInfo(position: number) {
   display: flex;
 }
 
-/* Uses CSS custom properties for dynamic height */
 .card-wrapper {
   width: 100%;
   min-height: var(--min-card-height, auto);
@@ -408,7 +406,6 @@ function getAudioInfo(position: number) {
   width: 100%;
   display: flex;
   flex-direction: column;
-  /* Ensure both card faces have the same min-height */
   min-height: var(--min-card-height, auto);
 }
 
