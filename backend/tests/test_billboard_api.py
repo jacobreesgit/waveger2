@@ -105,6 +105,7 @@ def test_get_chart_with_week(client, mock_api_success):
     args, kwargs = mock_api_success.call_args
     assert kwargs['params']['week'] == '2023-01-01'
 
+@freeze_time("2023-04-05")  # A Wednesday (not Tuesday)
 def test_cached_response(client, mock_api_success):
     """Test that cached data is returned on subsequent requests"""
     # First request should hit the API
@@ -125,6 +126,7 @@ def test_cached_response(client, mock_api_success):
     # API should not be called again
     mock_api_success.assert_not_called()
 
+@freeze_time("2023-04-05")  # A Wednesday (not Tuesday)
 def test_refresh_param(client, mock_api_success):
     """Test that refresh=true bypasses cache"""
     # First request caches the data

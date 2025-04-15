@@ -74,7 +74,7 @@ def get_chart():
             return jsonify({**new_data, "cached": False})
         
         # For current charts - check if data changed (only on Tuesdays)
-        if datetime.now().weekday() == 1 and cached_data:
+        if datetime.now().weekday() == 1 and cached_data and not refresh:
             if new_data.get("chart", {}).get("date") == cached_data.get("chart", {}).get("date"):
                 # Data hasn't changed, check again in an hour
                 cache.set(cache_key, cached_data, timeout=ONE_HOUR)
