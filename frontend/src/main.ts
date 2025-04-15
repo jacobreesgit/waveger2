@@ -5,7 +5,7 @@ import "@/style.css";
 import App from "@/App.vue";
 
 import PrimeVue from "primevue/config";
-import Aura from "@primeuix/themes/aura";
+import CustomPreset from "@/theme/customPreset";
 
 import ToastService from "primevue/toastservice";
 
@@ -16,7 +16,7 @@ app.use(createPinia());
 app.use(router);
 app.use(PrimeVue, {
   theme: {
-    preset: Aura,
+    preset: CustomPreset,
   },
 });
 app.use(ToastService);

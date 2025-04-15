@@ -1,53 +1,11 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref } from "vue";
 import { useChartStore } from "@/stores/chartStore";
 
 const chartStore = useChartStore();
-const selectedDate = ref<string>("");
-
-const chartOptions = [
-  { id: "hot-100", name: "Billboard Hot 100™" },
-  { id: "billboard-200", name: "Billboard 200™" },
-  { id: "artist-100", name: "Billboard Artist 100" },
-  { id: "emerging-artists", name: "Emerging Artists" },
-  { id: "streaming-songs", name: "Streaming Songs" },
-  { id: "radio-songs", name: "Radio Songs" },
-  { id: "digital-song-sales", name: "Digital Song Sales" },
-  { id: "summer-songs", name: "Songs of the Summer" },
-  { id: "top-album-sales", name: "Top Album Sales" },
-  { id: "top-streaming-albums", name: "Top Streaming Albums" },
-  { id: "independent-albums", name: "Independent Albums" },
-  { id: "vinyl-albums", name: "Vinyl Albums" },
-  { id: "indie-store-album-sales", name: "Indie Store Album Sales" },
-  {
-    id: "billboard-u-s-afrobeats-songs",
-    name: "Billboard U.S. Afrobeats Songs",
-  },
-];
 
 const currentAudio = ref<HTMLAudioElement | null>(null);
 const playingTrackId = ref<number | null>(null);
-
-// Watch for changes to selectedDate and update the chart
-watch([selectedDate], () => {
-  fetchCurrentChart();
-});
-
-// Fetch the current chart with options
-function fetchCurrentChart() {
-  chartStore.fetchChart(chartStore.chartId, selectedDate.value);
-}
-
-// Handle chart selection change
-function onChartChange() {
-  fetchCurrentChart();
-}
-
-// Get today's date in YYYY-MM-DD format for max date attribute
-function getToday(): string {
-  const today = new Date();
-  return today.toISOString().split("T")[0];
-}
 
 // Play preview if available
 function playPreview(previewUrl: string | null, position: number) {
@@ -101,56 +59,8 @@ function getPositionChangeClass(
 </script>
 
 <template>
-  <div class="container mx-auto px-4 py-6">
-    <!-- Controls section -->
-    <div class="bg-white p-4 rounded-lg shadow mb-6">
-      <h2 class="text-xl font-semibold mb-4">Chart Options</h2>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <!-- Chart selector -->
-        <div>
-          <label
-            for="chart-select"
-            class="block text-sm font-medium text-gray-700 mb-1"
-            >Select Chart</label
-          >
-          <select
-            id="chart-select"
-            v-model="chartStore.chartId"
-            @change="onChartChange"
-            class="w-full rounded-lg border shadow-sm p-2 bg-white text-gray-800"
-          >
-            <option
-              v-for="chart in chartOptions"
-              :key="chart.id"
-              :value="chart.id"
-            >
-              {{ chart.name }}
-            </option>
-          </select>
-        </div>
-
-        <!-- Date picker -->
-        <div>
-          <label
-            for="date-picker"
-            class="block text-sm font-medium text-gray-700 mb-1"
-            >Select Date</label
-          >
-          <div class="flex">
-            <input
-              id="date-picker"
-              type="date"
-              v-model="selectedDate"
-              :max="getToday()"
-              class="flex-1 rounded-lg border shadow-sm p-2 bg-white text-gray-800"
-              placeholder="YYYY-MM-DD"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-
+  <div class="chart">
+    <h1>Chart</h1>
     <!-- Loading state -->
     <div v-if="chartStore.isLoading" class="text-center py-8">
       <div
