@@ -21,4 +21,7 @@
     display: flex;
     justify-content: flex-end;
   }
+  .p-menubar-root-list {
+    width: max-content;
+  }
 }

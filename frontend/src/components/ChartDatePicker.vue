@@ -56,13 +56,11 @@ watch(
 </script>
 
 <template>
-  <div class="chart-date-picker flex flex-col gap-1">
+  <div class="chart-date-picker flex flex-col gap-1 flex-grow sm:flex-grow-0">
     <label for="chart-select" class="block text-sm font-medium text-gray-700"
       >Select Date</label
     >
-    <div
-      class="chart-date-picker__input flex items-center gap-2 flex-grow sm:flex-grow-0"
-    >
+    <div class="chart-date-picker__input flex items-center gap-2">
       <DatePicker
         v-model="selectedDate"
         :maxDate="today"

@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import { useChartStore } from "@/stores/chartStore";
 import Chart from "@/components/Chart.vue";
 import ChartSelector from "@/components/ChartSelector.vue";
 import ChartDatePicker from "@/components/ChartDatePicker.vue";
-
-const chartStore = useChartStore();
 </script>
 
 <template>

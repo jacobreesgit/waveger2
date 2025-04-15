@@ -24,7 +24,7 @@ const menuItems = computed<MenuItem[]>(() => {
 
 <template>
   <div
-    class="nav flex items-center p-2 px-4 pl-0 sm:pl-4 bg-gray-100 relative gap-7"
+    class="nav flex items-center p-2 px-4 sm:pl-4 bg-gray-100 relative gap-7"
   >
     <div
       class="nav__logo sm:order-0 order-1 flex-grow sm:flex-grow-0 mr-4 sm:mr-0"
