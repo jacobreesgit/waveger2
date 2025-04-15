@@ -8,7 +8,12 @@ const chartStore = useChartStore();
 const currentAudio = ref<HTMLAudioElement | null>(null);
 const playingTrackId = ref<number | null>(null);
 const audioProgress = ref<Record<number, number>>({});
-const hoveredCard = ref<number | null>(null);
+const flippedCards = ref<Record<number, boolean>>({});
+
+// Toggle card flip state
+function toggleFlip(position: number) {
+  flippedCards.value[position] = !flippedCards.value[position];
+}
 
 // Play preview if available
 function playPreview(
@@ -79,10 +84,6 @@ function getPositionChangeClass(
   return diff > 0 ? "text-green-500" : "text-red-500";
 }
 
-function setHoveredCard(position: number | null) {
-  hoveredCard.value = position;
-}
-
 // Generate waveform data
 function generateWaveformData(position: number): number[] {
   // Pseudo-random but consistent per position
@@ -112,7 +113,7 @@ function getAudioInfo(position: number) {
 </script>
 
 <template>
-  <div class="chart h-full w-full">
+  <div class="chart w-full">
     <LoadingSpinner
       v-if="chartStore.isLoading"
       label="Loading chart data..."
@@ -139,19 +140,17 @@ function getAudioInfo(position: number) {
 
       <div class="flex flex-wrap gap-4 justify-center">
         <div
-          v-for="(song, index) in chartStore.chartData.songs"
+          v-for="song in chartStore.chartData.songs"
           :key="song.position"
-          class="chart-card-container w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1rem)] xl:w-[calc(25%-1rem)] 2xl:w-[calc(25%-1rem)]"
-          @mouseenter="setHoveredCard(song.position)"
-          @mouseleave="setHoveredCard(null)"
+          class="chart-card-container w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1rem)] xl:w-[calc(25%-1rem)]"
+          @mouseenter="toggleFlip(song.position)"
+          @mouseleave="toggleFlip(song.position)"
         >
-          <div
-            class="chart-card h-full perspective-effect"
-            :class="{ 'is-flipped': hoveredCard === song.position }"
-          >
-            <!-- Front of card -->
+          <transition name="p-flip" mode="out-in">
+            <!-- Front card -->
             <div
-              class="chart-card__front relative flex flex-col bg-white rounded-lg shadow-md overflow-hidden h-full"
+              v-if="!flippedCards[song.position]"
+              class="card-face bg-white rounded-lg shadow-md flex flex-col"
             >
               <div class="relative">
                 <img
@@ -168,7 +167,7 @@ function getAudioInfo(position: number) {
 
               <div class="p-4 flex flex-col flex-grow">
                 <div class="flex justify-between items-start mb-1">
-                  <h3 class="font-bold text-lg truncate" :title="song.name">
+                  <h3 class="font-bold text-lg" :title="song.name">
                     {{ song.name }}
                   </h3>
                   <div
@@ -189,7 +188,7 @@ function getAudioInfo(position: number) {
                   </div>
                 </div>
 
-                <p class="text-gray-600 mb-2 truncate" :title="song.artist">
+                <p class="text-gray-600 mb-2" :title="song.artist">
                   {{ song.artist }}
                 </p>
 
@@ -212,24 +211,24 @@ function getAudioInfo(position: number) {
                   </div>
                 </div>
               </div>
-
-              <div class="chart-card__actions p-3 pt-0 flex gap-2">
-                <a
-                  v-if="song.apple_music?.url"
-                  :href="song.apple_music.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="text-xs py-1 px-3 bg-black text-white rounded-full flex items-center"
-                >
-                  <i class="pi pi-apple mr-1"></i> Listen on Apple Music
-                </a>
-              </div>
             </div>
 
-            <!-- Back of card -->
+            <!-- Back card -->
             <div
-              class="chart-card__back flex flex-col relative bg-gradient-to-br from-gray-900 to-gray-800 rounded-lg shadow-lg overflow-hidden h-full"
+              v-else
+              class="card-face rounded-lg shadow-lg flex flex-col"
+              :style="{
+                backgroundImage: `url(${
+                  song.apple_music?.artwork_url || song.image
+                })`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }"
             >
+              <div
+                class="absolute inset-0 backdrop-blur-sm bg-black/55 rounded-lg"
+              ></div>
+
               <!-- Position Badge -->
               <div
                 class="absolute top-0 left-0 m-3 text-white font-bold text-lg z-10"
@@ -239,7 +238,7 @@ function getAudioInfo(position: number) {
 
               <!-- Central content -->
               <div
-                class="flex flex-col items-center justify-center p-6 h-full text-white gap-6"
+                class="relative z-10 p-6 flex flex-col items-center justify-center h-full text-white gap-6"
               >
                 <!-- Song Title -->
                 <h3 class="font-bold text-xl text-center">{{ song.name }}</h3>
@@ -276,9 +275,9 @@ function getAudioInfo(position: number) {
                     <div class="inner-circle flex items-center justify-center">
                       <span
                         v-if="playingTrackId === song.position"
-                        class="pi pi-pause text-2xl"
+                        class="pi pi-pause-circle text-2xl"
                       ></span>
-                      <span v-else class="pi pi-play text-2xl"></span>
+                      <span v-else class="pi pi-play-circle text-2xl"></span>
                     </div>
                   </div>
                 </div>
@@ -302,7 +301,7 @@ function getAudioInfo(position: number) {
                 </div>
               </div>
             </div>
-          </div>
+          </transition>
         </div>
       </div>
     </div>
@@ -310,47 +309,46 @@ function getAudioInfo(position: number) {
 </template>
 
 <style lang="scss" scoped>
-.chart-card-container {
-  height: 420px;
-  perspective: 1500px;
+/* Add flip animation for PrimeVue transition */
+.p-flip-enter-active {
+  animation: p-flip-in 0.6s;
 }
-
-.chart-card {
-  position: relative;
-  transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  transform-style: preserve-3d;
-  width: 100%;
-
-  .flip-hint {
-    opacity: 0.7;
-    transition: opacity 0.3s ease;
+.p-flip-leave-active {
+  animation: p-flip-out 0.6s;
+}
+@keyframes p-flip-in {
+  0% {
+    transform: rotateY(90deg);
+    opacity: 0;
   }
-
-  &:hover .flip-hint {
+  100% {
+    transform: rotateY(0deg);
     opacity: 1;
   }
-
-  &.is-flipped {
-    transform: rotateY(180deg);
-  }
-
-  &__front,
-  &__back {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-  }
-
-  &__front {
-    z-index: 2;
+}
+@keyframes p-flip-out {
+  0% {
     transform: rotateY(0deg);
+    opacity: 1;
   }
+  100% {
+    transform: rotateY(90deg);
+    opacity: 0;
+  }
+}
 
-  &__back {
-    transform: rotateY(180deg);
-  }
+.chart-card-container {
+  position: relative;
+  perspective: 1500px;
+  display: flex;
+}
+
+.card-face {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
 }
 
 .play-button-container {
