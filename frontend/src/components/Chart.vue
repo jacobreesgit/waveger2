@@ -157,7 +157,7 @@ function getAudioInfo(position: number) {
 </script>
 
 <template>
-  <div class="chart w-full">
+  <div class="chart h-full">
     <LoadingSpinner
       v-if="chartStore.isLoading"
       label="Loading chart data..."
@@ -199,7 +199,7 @@ function getAudioInfo(position: number) {
               <!-- Front card - Note the card-front class for height measurement -->
               <div
                 v-if="!flippedCards[song.position]"
-                class="card-face card-front bg-white rounded-lg shadow-md flex flex-col"
+                class="card-face overflow-hidden card-front bg-white rounded-lg shadow-md flex flex-col"
               >
                 <div class="relative">
                   <img
