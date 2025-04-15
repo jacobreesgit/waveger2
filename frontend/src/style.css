@@ -1,8 +1,24 @@
 @import "tailwindcss";
 
+/* Menu */
 .active-route .p-menubar-item-content {
   background-color: var(--p-menubar-item-active-background);
 }
 .active-route * {
   color: var(--p-menubar-item-active-color) !important;
+}
+
+.p-menubar {
+  padding: 8px 0 !important;
+}
+
+@media (min-width: 961px) {
+  .p-menubar-root-list,
+  .p-menubar-root-list li:last-child {
+    flex-grow: 1;
+  }
+  .p-menubar-root-list li:last-child {
+    display: flex;
+    justify-content: flex-end;
+  }
 }

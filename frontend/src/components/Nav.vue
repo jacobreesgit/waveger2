@@ -23,7 +23,9 @@ const menuItems = computed<MenuItem[]>(() => {
 </script>
 
 <template>
-  <div class="nav flex items-center p-2 px-4 pl-0 sm:pl-4 bg-gray-100 relative">
+  <div
+    class="nav flex items-center p-2 px-4 pl-0 sm:pl-4 bg-gray-100 relative gap-7"
+  >
     <div
       class="nav__logo sm:order-0 order-1 flex-grow sm:flex-grow-0 mr-4 sm:mr-0"
     >
@@ -36,12 +38,8 @@ const menuItems = computed<MenuItem[]>(() => {
 
     <Menubar
       :model="menuItems"
-      class="nav__nav-menu sm:flex-grow bg-transparent border-none mr-4 sm:mx-4 sm:order-1 order-0"
+      class="nav__nav-menu sm:flex-grow bg-transparent border-none sm:order-1 order-0"
     />
-
-    <div class="nav__nav-right order-2 sm:order-3">
-      <!-- <CountrySelector /> -->
-    </div>
   </div>
 </template>
 
