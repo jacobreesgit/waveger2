@@ -54,19 +54,22 @@ export const useChartStore = defineStore("chart", {
         };
 
         // Add week parameter if provided
-        if (week) {
-          params.week = week;
-        }
-
+        if (week) params.week = week;
         // Add refresh parameter if true
-        if (refresh) {
-          params.refresh = true;
-        }
+        if (refresh) params.refresh = true;
+
+        console.log(
+          "Making request to:",
+          `${baseUrl}/billboard_api.php`,
+          "with params:",
+          params
+        );
 
         const response = await axios.get(`${baseUrl}/billboard_api.php`, {
           params,
         });
-        console.log("Fetched chart data:", response);
+
+        console.log("Fetched chart data");
         this.chartData = response.data;
       } catch (error) {
         console.error("Error fetching chart data:", error);

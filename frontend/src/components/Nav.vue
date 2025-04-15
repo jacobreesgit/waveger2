@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import router from "@/router/index";
+import { useRouter } from "vue-router";
 import Menubar from "primevue/menubar";
 import type { MenuItem } from "primevue/menuitem";
+
+const router = useRouter();
 
 const menuItems = computed<MenuItem[]>(() => {
   return router.options.routes
@@ -10,7 +12,6 @@ const menuItems = computed<MenuItem[]>(() => {
     .map((route) => ({
       label: route.meta?.title as string,
       icon: route.meta?.icon as string,
-      class: route.name === route.name ? "active-route" : "",
       command: () => {
         router.push({ name: route.name as string });
       },
