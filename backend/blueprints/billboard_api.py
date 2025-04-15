@@ -111,13 +111,22 @@ class AppleMusicService:
             return None
             
         try:
-            # Format search term and construct API URL
-            search_term = f"{title} {artist}".replace(" ", "+")
-            url = f"https://api.music.apple.com/v1/catalog/us/search?term={search_term}&types=songs&limit=1"
+            # Use requests' params argument to properly handle URL encoding
+            # Let the requests library handle parameter encoding
+            url = "https://api.music.apple.com/v1/catalog/us/search"
             headers = {"Authorization": f"Bearer {token}"}
             
+            # Combine title and artist, optionally replace ampersands for better search results
+            search_term = f"{title} {artist}"
+            
+            params = {
+                'term': search_term,
+                'types': 'songs',
+                'limit': 1
+            }
+            
             # Make the API request with a timeout to prevent hanging
-            response = requests.get(url, headers=headers, timeout=5)
+            response = requests.get(url, headers=headers, params=params, timeout=5)
             response.raise_for_status()
             data = response.json()
             
@@ -140,7 +149,7 @@ class AppleMusicService:
             logger.error(f"Error searching Apple Music: {e}")
             # Cache failures briefly to prevent immediate retries
             cache.set(cache_key, None, timeout=300)
-            return None
+            return None    
     
     @staticmethod
     def enrich_chart_data(data):
