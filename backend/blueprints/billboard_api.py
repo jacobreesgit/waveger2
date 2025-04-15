@@ -136,6 +136,29 @@ class AppleMusicService:
                 # Return the complete song object with all data from Apple Music
                 song = data["results"]["songs"]["data"][0]
                 
+                # Log the complete Apple Music data for debugging
+                logger.info(f"Apple Music data for '{title}' by '{artist}':")
+                logger.info(f"Song ID: {song.get('id')}")
+                logger.info(f"Type: {song.get('type')}")
+                
+                # Log all attributes with proper formatting
+                if song.get("attributes"):
+                    logger.info("Song Attributes:")
+                    for key, value in song["attributes"].items():
+                        # Format complex nested objects for better readability
+                        if isinstance(value, dict):
+                            logger.info(f"  {key}: {value}")
+                        elif isinstance(value, list) and len(value) > 0:
+                            logger.info(f"  {key}: {value}")
+                        else:
+                            logger.info(f"  {key}: {value}")
+                
+                # Log relationships if available
+                if song.get("relationships"):
+                    logger.info("Song Relationships:")
+                    for rel_type, rel_data in song["relationships"].items():
+                        logger.info(f"  {rel_type}: {len(rel_data.get('data', []))} items")
+                
                 # Process artwork URL for direct usage (replace placeholders)
                 if song.get("attributes", {}).get("artwork", {}).get("url"):
                     song["attributes"]["artwork"]["url"] = song["attributes"]["artwork"]["url"].replace("{w}", "1000").replace("{h}", "1000")
@@ -185,6 +208,7 @@ class AppleMusicService:
             return data
             
         # Process songs in parallel (max 5 workers to avoid overwhelming)
+        # Always process songs to ensure we have the latest Apple Music data
         songs_to_process = songs
         
         if not songs_to_process:
