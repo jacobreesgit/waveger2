@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import LoadingSpinner from "@/components/LoadingSpinner.vue";
 import { useChartStore } from "@/stores/chartStore";
 
@@ -7,9 +7,19 @@ const chartStore = useChartStore();
 
 const currentAudio = ref<HTMLAudioElement | null>(null);
 const playingTrackId = ref<number | null>(null);
+const audioProgress = ref<Record<number, number>>({});
+const hoveredCard = ref<number | null>(null);
 
 // Play preview if available
-function playPreview(previewUrl: string | null, position: number) {
+function playPreview(
+  previewUrl: string | null,
+  position: number,
+  event?: Event
+) {
+  if (event) {
+    event.stopPropagation();
+  }
+
   // Stop any currently playing audio
   if (currentAudio.value) {
     currentAudio.value.pause();
@@ -24,14 +34,25 @@ function playPreview(previewUrl: string | null, position: number) {
 
   if (previewUrl) {
     const audio = new Audio(previewUrl);
+
+    // Set up progress tracking
+    audio.ontimeupdate = () => {
+      if (audio.duration) {
+        audioProgress.value[position] =
+          (audio.currentTime / audio.duration) * 100;
+      }
+    };
+
     audio.play();
     currentAudio.value = audio;
     playingTrackId.value = position;
+    audioProgress.value[position] = 0;
 
     // Reset when playback ends
     audio.onended = () => {
       playingTrackId.value = null;
       currentAudio.value = null;
+      audioProgress.value[position] = 0;
     };
   }
 }
@@ -56,6 +77,37 @@ function getPositionChangeClass(
   const diff = last - current;
   if (diff === 0) return "text-gray-500";
   return diff > 0 ? "text-green-500" : "text-red-500";
+}
+
+function setHoveredCard(position: number | null) {
+  hoveredCard.value = position;
+}
+
+// Generate waveform data
+function generateWaveformData(position: number): number[] {
+  // Pseudo-random but consistent per position
+  const seed = position * 13;
+  const bars = 16;
+  const result = [];
+
+  for (let i = 0; i < bars; i++) {
+    // Generate a value between 0.2 and 1.0 based on position
+    const val = 0.2 + (((seed + i * 7) % 100) / 100) * 0.8;
+    result.push(val);
+  }
+
+  return result;
+}
+
+// Compute if audio is playing and get normalized progress (0-1)
+function getAudioInfo(position: number) {
+  const isPlaying = playingTrackId.value === position;
+  const progress = audioProgress.value[position] ?? 0;
+
+  return {
+    isPlaying,
+    progress: progress / 100,
+  };
 }
 </script>
 
@@ -89,76 +141,167 @@ function getPositionChangeClass(
         <div
           v-for="(song, index) in chartStore.chartData.songs"
           :key="song.position"
-          class="chart-card w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1rem)] xl:w-[calc(25%-1rem)] 2xl:w-[calc(25%-1rem)] flex flex-col bg-white rounded-lg shadow-md overflow-hidden transition-transform duration-200 hover:shadow-lg hover:-translate-y-1"
+          class="chart-card-container w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1rem)] xl:w-[calc(25%-1rem)] 2xl:w-[calc(25%-1rem)]"
+          @mouseenter="setHoveredCard(song.position)"
+          @mouseleave="setHoveredCard(null)"
         >
-          <div class="relative">
-            <img
-              :src="song.apple_music?.artwork_url || song.image"
-              :alt="`${song.name} by ${song.artist}`"
-              class="w-full aspect-square object-cover"
-            />
+          <div
+            class="chart-card h-full perspective-effect"
+            :class="{ 'is-flipped': hoveredCard === song.position }"
+          >
+            <!-- Front of card -->
             <div
-              class="absolute top-0 left-0 m-2 bg-black bg-opacity-70 text-white font-bold rounded-full w-10 h-10 flex items-center justify-center"
+              class="chart-card__front relative flex flex-col bg-white rounded-lg shadow-md overflow-hidden h-full"
             >
-              {{ song.position }}
-            </div>
-            <div
-              class="absolute bottom-0 right-0 m-2 rounded-full w-10 h-10 flex items-center justify-center bg-black bg-opacity-70 cursor-pointer hover:bg-opacity-90 transition-all"
-              @click="playPreview(song.apple_music?.preview_url, song.position)"
-              v-if="song.apple_music?.preview_url"
-            >
-              <span
-                v-if="playingTrackId === song.position"
-                class="text-white pi pi-pause-circle text-lg"
-              ></span>
-              <span v-else class="text-white pi pi-play-circle text-lg"></span>
-            </div>
-          </div>
+              <div class="relative">
+                <img
+                  :src="song.apple_music?.artwork_url || song.image"
+                  :alt="`${song.name} by ${song.artist}`"
+                  class="w-full aspect-square object-cover"
+                />
+                <div
+                  class="absolute top-0 left-0 m-2 bg-black bg-opacity-70 text-white font-bold rounded-full w-10 h-10 flex items-center justify-center"
+                >
+                  {{ song.position }}
+                </div>
+              </div>
 
-          <div class="p-4 flex flex-col flex-grow">
-            <div class="flex justify-between items-start mb-1">
-              <h3 class="font-bold text-lg" :title="song.name">
-                {{ song.name }}
-              </h3>
+              <div class="p-4 flex flex-col flex-grow">
+                <div class="flex justify-between items-start mb-1">
+                  <h3 class="font-bold text-lg" :title="song.name">
+                    {{ song.name }}
+                  </h3>
+                  <div
+                    :class="
+                      getPositionChangeClass(
+                        song.position,
+                        song.last_week_position
+                      )
+                    "
+                    class="text-sm font-bold ml-2 whitespace-nowrap"
+                  >
+                    {{
+                      formatPositionChange(
+                        song.position,
+                        song.last_week_position
+                      )
+                    }}
+                  </div>
+                </div>
+
+                <p class="text-gray-600 mb-2" :title="song.artist">
+                  {{ song.artist }}
+                </p>
+
+                <div
+                  class="mt-auto pt-3 border-t border-gray-100 text-sm text-gray-500 flex justify-between"
+                >
+                  <div>
+                    Peak:
+                    <span class="font-medium">{{ song.peak_position }}</span>
+                  </div>
+                  <div>
+                    Weeks:
+                    <span class="font-medium">{{ song.weeks_on_chart }}</span>
+                  </div>
+                  <div v-if="song.last_week_position">
+                    Last Week:
+                    <span class="font-medium">{{
+                      song.last_week_position
+                    }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="chart-card__actions p-3 pt-0 flex gap-2">
+                <a
+                  v-if="song.apple_music?.url"
+                  :href="song.apple_music.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-xs py-1 px-3 bg-black text-white rounded-full flex items-center"
+                >
+                  <i class="pi pi-apple mr-1"></i> Listen on Apple Music
+                </a>
+              </div>
+            </div>
+
+            <!-- Back of card -->
+            <div
+              class="chart-card__back flex flex-col relative bg-gradient-to-br from-gray-900 to-gray-800 rounded-lg shadow-lg overflow-hidden h-full"
+            >
+              <!-- Position Badge -->
               <div
-                :class="
-                  getPositionChangeClass(song.position, song.last_week_position)
-                "
-                class="text-sm font-bold ml-2 whitespace-nowrap"
+                class="absolute top-0 left-0 m-3 text-white font-bold text-lg z-10"
               >
-                {{
-                  formatPositionChange(song.position, song.last_week_position)
-                }}
+                #{{ song.position }}
+              </div>
+
+              <!-- Central content -->
+              <div
+                class="flex flex-col items-center justify-center p-6 h-full text-white gap-6"
+              >
+                <!-- Song Title -->
+                <h3 class="font-bold text-xl text-center">{{ song.name }}</h3>
+
+                <!-- Artist -->
+                <p class="text-gray-300 text-center">{{ song.artist }}</p>
+
+                <!-- Play Button -->
+                <div
+                  v-if="song.apple_music?.preview_url"
+                  class="play-button-container relative cursor-pointer"
+                  @click="
+                    playPreview(
+                      song.apple_music?.preview_url,
+                      song.position,
+                      $event
+                    )
+                  "
+                >
+                  <!-- Circular progress -->
+                  <div
+                    class="circular-progress"
+                    :style="{
+                      background: `conic-gradient(
+                        rgba(255, 255, 255, 0.8) ${
+                          getAudioInfo(song.position).progress * 360
+                        }deg,
+                        rgba(255, 255, 255, 0.2) ${
+                          getAudioInfo(song.position).progress * 360
+                        }deg
+                      )`,
+                    }"
+                  >
+                    <div class="inner-circle flex items-center justify-center">
+                      <span
+                        v-if="playingTrackId === song.position"
+                        class="pi pi-pause text-2xl"
+                      ></span>
+                      <span v-else class="pi pi-play text-2xl"></span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Waveform visualization -->
+                <div
+                  class="waveform-container"
+                  :class="{ active: playingTrackId === song.position }"
+                >
+                  <div
+                    v-for="(barHeight, index) in generateWaveformData(
+                      song.position
+                    )"
+                    :key="index"
+                    class="waveform-bar"
+                    :style="{
+                      height: `${barHeight * 40}px`,
+                      animationDelay: `${index * 0.05}s`,
+                    }"
+                  ></div>
+                </div>
               </div>
             </div>
-
-            <p class="text-gray-600 mb-2" :title="song.artist">
-              {{ song.artist }}
-            </p>
-
-            <div
-              class="mt-auto pt-3 border-t border-gray-100 text-sm text-gray-500 flex justify-between"
-            >
-              <div>
-                Peak: <span class="font-medium">{{ song.peak_position }}</span>
-              </div>
-              <div>
-                Weeks:
-                <span class="font-medium">{{ song.weeks_on_chart }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="chart-card__actions p-3 pt-0 flex gap-2">
-            <a
-              v-if="song.apple_music?.url"
-              :href="song.apple_music.url"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-xs py-1 px-3 bg-black text-white rounded-full flex items-center"
-            >
-              <i class="pi pi-apple mr-1"></i> Apple Music
-            </a>
           </div>
         </div>
       </div>
@@ -167,12 +310,111 @@ function getPositionChangeClass(
 </template>
 
 <style lang="scss" scoped>
-.chart-card {
-  transition: all 0.2s ease-in-out;
-  height: 100%;
+.chart-card-container {
+  height: 420px;
+  perspective: 1500px;
+}
 
-  &:hover {
-    transform: translateY(-5px);
+.chart-card {
+  position: relative;
+  transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transform-style: preserve-3d;
+  width: 100%;
+
+  .flip-hint {
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
+  }
+
+  &:hover .flip-hint {
+    opacity: 1;
+  }
+
+  &.is-flipped {
+    transform: rotateY(180deg);
+  }
+
+  &__front,
+  &__back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  &__front {
+    z-index: 2;
+    transform: rotateY(0deg);
+  }
+
+  &__back {
+    transform: rotateY(180deg);
+  }
+}
+
+.play-button-container {
+  width: 80px;
+  height: 80px;
+
+  .circular-progress {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.2);
+    transition: transform 0.3s ease;
+
+    &:hover {
+      transform: scale(1.05);
+    }
+
+    &:active {
+      transform: scale(0.95);
+    }
+  }
+
+  .inner-circle {
+    width: 90%;
+    height: 90%;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 50%;
+    color: white;
+  }
+}
+
+.waveform-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 40px;
+  width: 80%;
+
+  &.active .waveform-bar {
+    animation: equalizer 0.8s infinite alternate;
+  }
+
+  .waveform-bar {
+    width: 4px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 2px;
+    transition: height 0.3s ease;
+
+    &:nth-child(odd) {
+      background: rgba(255, 255, 255, 0.7);
+    }
+  }
+}
+
+@keyframes equalizer {
+  0% {
+    transform: scaleY(0.8);
+  }
+  100% {
+    transform: scaleY(1.2);
   }
 }
 </style>
