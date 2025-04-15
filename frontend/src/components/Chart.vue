@@ -60,7 +60,7 @@ function getPositionChangeClass(
 
 <template>
   <div class="chart">
-    <h1>Chart</h1>
+    <h1>Chart Component</h1>
     <!-- Loading state -->
     <div v-if="chartStore.isLoading" class="text-center py-8">
       <div

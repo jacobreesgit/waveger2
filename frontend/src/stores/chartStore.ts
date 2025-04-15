@@ -34,13 +34,21 @@ export const useChartStore = defineStore("chart", {
     isLoading: false,
     error: null as string | null,
     chartId: "hot-100",
+    selectedDate: formatToday(), // Store the date in the store
   }),
 
   actions: {
-    async fetchChart(id = "hot-100", week?: string, refresh = false) {
+    async fetchChart(id?: string, week?: string, refresh = false) {
       this.isLoading = true;
       this.error = null;
-      this.chartId = id;
+
+      // Use provided values or defaults from state
+      const chartId = id || this.chartId;
+      const dateStr = week || this.selectedDate;
+
+      // Update state with these values
+      this.chartId = chartId;
+      if (week) this.selectedDate = week;
 
       try {
         // Use Vite's proxy for development, direct URL in production
@@ -50,11 +58,11 @@ export const useChartStore = defineStore("chart", {
 
         // Prepare query parameters
         const params: Record<string, string | boolean> = {
-          id: this.chartId,
+          id: chartId,
         };
 
         // Add week parameter if provided
-        if (week) params.week = week;
+        if (dateStr) params.week = dateStr;
         // Add refresh parameter if true
         if (refresh) params.refresh = true;
 
@@ -83,5 +91,24 @@ export const useChartStore = defineStore("chart", {
     changeChart(id: string) {
       this.fetchChart(id);
     },
+
+    setDate(date: string) {
+      this.selectedDate = date;
+      this.fetchChart();
+    },
+
+    setToday() {
+      this.selectedDate = formatToday();
+      this.fetchChart();
+    },
   },
 });
+
+// Helper function to format today's date
+function formatToday(): string {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
