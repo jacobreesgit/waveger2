@@ -1,26 +1,30 @@
 import { defineStore } from "pinia";
 import axios from "axios";
 
-// Types
-interface ChartEntry {
+// Types that match the actual API structure
+export interface Song {
   position: number;
-  title: string;
+  name: string;
   artist: string;
   image: string;
+  last_week_position: number;
+  peak_position: number;
+  weeks_on_chart: number;
   apple_music?: {
-    preview_url: string | null;
     artwork_url: string;
+    preview_url: string | null;
     url: string;
   } | null;
+  url: string;
 }
 
-interface ChartData {
-  chart: {
-    name: string;
-    date: string;
-  };
-  entries: ChartEntry[];
-  cached?: boolean;
+export interface ChartData {
+  cached: boolean;
+  info: string;
+  note: string;
+  songs: Song[];
+  title: string;
+  week: string;
 }
 
 export const useChartStore = defineStore("chart", {
