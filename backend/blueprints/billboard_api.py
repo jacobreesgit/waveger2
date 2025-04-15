@@ -90,14 +90,14 @@ class AppleMusicService:
         Search Apple Music for a song by title and artist.
         
         Creates a cache key based on title and artist to avoid repeated API calls.
-        Returns all available song information from Apple Music with easy access to common fields.
+        Returns all available song information from Apple Music.
         
         Args:
             title (str): The song title to search for
             artist (str): The artist name to search for
             
         Returns:
-            dict: Complete song details from Apple Music API with flattened fields, or None if not found
+            dict: Complete song details including genre information from Apple Music
         """
         # Create a cache key using both title and artist to ensure uniqueness
         cache_key = f"apple_music:search:{title}:{artist}"
@@ -111,7 +111,7 @@ class AppleMusicService:
             return None
             
         try:
-            # Use requests' params argument to properly handle URL encoding
+            # Use requests library to query Apple Music API
             url = "https://api.music.apple.com/v1/catalog/us/search"
             headers = {"Authorization": f"Bearer {token}"}
             
@@ -122,7 +122,7 @@ class AppleMusicService:
                 'term': search_term,
                 'types': 'songs',
                 'limit': 1,
-                'include': 'artists,albums,playlists'  # Include all related resources
+                'include': 'artists,albums'  # Include related entities
             }
             
             # Make the API request with a timeout to prevent hanging
@@ -130,46 +130,59 @@ class AppleMusicService:
             response.raise_for_status()
             data = response.json()
             
-            # Extract the full song data from the response
+            # Extract the song data from the response
             result = None
             if data.get("results", {}).get("songs", {}).get("data"):
-                # Get the song and its attributes
+                # Get the complete song object
                 song = data["results"]["songs"]["data"][0]
                 attributes = song.get("attributes", {})
                 
-                # Create a result that contains both the complete object and flattened fields
+                # Process artwork URL - replace width/height placeholders
+                artwork_url = None
+                if attributes.get("artwork", {}).get("url"):
+                    artwork_url = attributes["artwork"]["url"].replace("{w}", "1000").replace("{h}", "1000")
+                
+                # Extract preview URL if available
+                preview_url = None
+                if attributes.get("previews") and len(attributes["previews"]) > 0:
+                    preview_url = attributes["previews"][0].get("url")
+                
+                # Create simplified response with all important metadata
                 result = {
+                    # Basic identifiers
                     "id": song.get("id"),
+                    "url": attributes.get("url"),
+                    "preview_url": preview_url,
+                    "artwork_url": artwork_url,
+                    
+                    # Core metadata
                     "name": attributes.get("name"),
                     "artist_name": attributes.get("artistName"),
                     "album_name": attributes.get("albumName"),
+                    
+                    # Additional metadata
                     "release_date": attributes.get("releaseDate"),
                     "duration_ms": attributes.get("durationInMillis"),
-                    "isrc": attributes.get("isrc"),
-                    "composer_name": attributes.get("composerName"),
-                    "disc_number": attributes.get("discNumber"),
-                    "track_number": attributes.get("trackNumber"),
-                    "url": attributes.get("url"),
-                    
-                    # Include genres directly at the top level
                     "genres": attributes.get("genreNames", []),
+                    "isrc": attributes.get("isrc"),
                     
-                    # Process artwork URL for direct usage
-                    "artwork_url": attributes.get("artwork", {}).get("url", "").replace("{w}", "1000").replace("{h}", "1000"),
+                    # Track details
+                    "track_number": attributes.get("trackNumber"),
+                    "disc_number": attributes.get("discNumber"),
+                    "composer": attributes.get("composerName"),
                     
-                    # Process preview URL for easier access
-                    "preview_url": attributes.get("previews", [{}])[0].get("url") if attributes.get("previews") else None,
-                    
-                    "raw_data": song
+                    # Additional useful info
+                    "explicit": attributes.get("contentRating") == "explicit",
+                    "apple_music_id": attributes.get("playParams", {}).get("id")
                 }
             
-            # Cache results for 24 hours - including null results to prevent repeated failed lookups
+            # Cache results for 24 hours - including null results
             cache.set(cache_key, result, timeout=24*60*60)
             return result
                 
         except Exception as e:
             logger.error(f"Error searching Apple Music: {e}")
-            # Cache failures briefly to prevent immediate retries
+            # Cache failures briefly to prevent repeated retries
             cache.set(cache_key, None, timeout=300)
             return None    
     
@@ -179,7 +192,7 @@ class AppleMusicService:
         Add Apple Music data to chart entries in parallel.
         
         Processes songs in batch using a thread pool to avoid slowing down the response.
-        Attaches complete Apple Music song data to each chart entry.
+        Always processes all songs to get the latest Apple Music data.
         
         Args:
             data (dict): Billboard chart data to enrich
@@ -200,8 +213,7 @@ class AppleMusicService:
             # Unknown structure
             return data
             
-        # Process songs in parallel (max 5 workers to avoid overwhelming)
-        # Always process songs to ensure we have the latest Apple Music data
+        # Process all songs to ensure we have the latest metadata
         songs_to_process = songs
         
         if not songs_to_process:
@@ -221,7 +233,7 @@ class AppleMusicService:
                 
                 # Add results back to songs, maintaining the original list order
                 for song, result in zip(songs_to_process, apple_music_results):
-                    if result:  # Only add if we got valid data
+                    if result:  # Only add if we found valid Apple Music data
                         song["apple_music"] = result
                     
         except Exception as e:
