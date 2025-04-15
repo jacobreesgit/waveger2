@@ -90,14 +90,14 @@ class AppleMusicService:
         Search Apple Music for a song by title and artist.
         
         Creates a cache key based on title and artist to avoid repeated API calls.
-        Returns all available song information from Apple Music.
+        Returns all available song information from Apple Music with easy access to common fields.
         
         Args:
             title (str): The song title to search for
             artist (str): The artist name to search for
             
         Returns:
-            dict: Complete song details from Apple Music API, or None if not found
+            dict: Complete song details from Apple Music API with flattened fields, or None if not found
         """
         # Create a cache key using both title and artist to ensure uniqueness
         cache_key = f"apple_music:search:{title}:{artist}"
@@ -133,19 +133,35 @@ class AppleMusicService:
             # Extract the full song data from the response
             result = None
             if data.get("results", {}).get("songs", {}).get("data"):
-                # Return the complete song object with all data from Apple Music
+                # Get the song and its attributes
                 song = data["results"]["songs"]["data"][0]
+                attributes = song.get("attributes", {})
                 
-                # Process artwork URL for direct usage (replace placeholders)
-                if song.get("attributes", {}).get("artwork", {}).get("url"):
-                    song["attributes"]["artwork"]["url"] = song["attributes"]["artwork"]["url"].replace("{w}", "1000").replace("{h}", "1000")
-                
-                # Process preview URL for easier access
-                if song.get("attributes", {}).get("previews"):
-                    song["preview_url"] = song["attributes"]["previews"][0].get("url")
-                
-                # Return the entire song object with all available data
-                result = song
+                # Create a result that contains both the complete object and flattened fields
+                result = {
+                    "id": song.get("id"),
+                    "name": attributes.get("name"),
+                    "artist_name": attributes.get("artistName"),
+                    "album_name": attributes.get("albumName"),
+                    "release_date": attributes.get("releaseDate"),
+                    "duration_ms": attributes.get("durationInMillis"),
+                    "isrc": attributes.get("isrc"),
+                    "composer_name": attributes.get("composerName"),
+                    "disc_number": attributes.get("discNumber"),
+                    "track_number": attributes.get("trackNumber"),
+                    "url": attributes.get("url"),
+                    
+                    # Include genres directly at the top level
+                    "genres": attributes.get("genreNames", []),
+                    
+                    # Process artwork URL for direct usage
+                    "artwork_url": attributes.get("artwork", {}).get("url", "").replace("{w}", "1000").replace("{h}", "1000"),
+                    
+                    # Process preview URL for easier access
+                    "preview_url": attributes.get("previews", [{}])[0].get("url") if attributes.get("previews") else None,
+                    
+                    "raw_data": song
+                }
             
             # Cache results for 24 hours - including null results to prevent repeated failed lookups
             cache.set(cache_key, result, timeout=24*60*60)
@@ -185,6 +201,7 @@ class AppleMusicService:
             return data
             
         # Process songs in parallel (max 5 workers to avoid overwhelming)
+        # Always process songs to ensure we have the latest Apple Music data
         songs_to_process = songs
         
         if not songs_to_process:
@@ -204,7 +221,8 @@ class AppleMusicService:
                 
                 # Add results back to songs, maintaining the original list order
                 for song, result in zip(songs_to_process, apple_music_results):
-                    song["apple_music"] = result
+                    if result:  # Only add if we got valid data
+                        song["apple_music"] = result
                     
         except Exception as e:
             logger.error(f"Error enriching chart data with Apple Music: {e}")
