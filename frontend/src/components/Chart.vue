@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
-import { useChartStore } from "../stores/chartStore";
+import { useChartStore } from "@/stores/chartStore";
 
 const chartStore = useChartStore();
 const selectedDate = ref<string>("");
-const refreshCache = ref<boolean>(false);
 
-// All available chart options from the API documentation
 const chartOptions = [
   { id: "hot-100", name: "Billboard Hot 100™" },
   { id: "billboard-200", name: "Billboard 200™" },
@@ -30,51 +28,19 @@ const chartOptions = [
 const currentAudio = ref<HTMLAudioElement | null>(null);
 const playingTrackId = ref<number | null>(null);
 
-// Watch for changes to selectedDate or refreshCache and update the chart
-watch([selectedDate, refreshCache], () => {
-  fetchCurrentChart();
-});
-
-// Fetch chart data when component mounts
-onMounted(() => {
+// Watch for changes to selectedDate and update the chart
+watch([selectedDate], () => {
   fetchCurrentChart();
 });
 
 // Fetch the current chart with options
 function fetchCurrentChart() {
-  chartStore.fetchChart(
-    chartStore.chartId,
-    selectedDate.value,
-    refreshCache.value
-  );
-
-  // Reset refresh cache flag after fetching
-  if (refreshCache.value) {
-    refreshCache.value = false;
-  }
+  chartStore.fetchChart(chartStore.chartId, selectedDate.value);
 }
 
 // Handle chart selection change
 function onChartChange() {
   fetchCurrentChart();
-}
-
-// Handle date reset
-function resetDate() {
-  selectedDate.value = "";
-  fetchCurrentChart();
-}
-
-// Format date for display
-function formatDate(dateString: string): string {
-  if (!dateString) return "Current";
-
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
 }
 
 // Get today's date in YYYY-MM-DD format for max date attribute
