@@ -168,7 +168,7 @@ function getAudioInfo(position: number) {
 
               <div class="p-4 flex flex-col flex-grow">
                 <div class="flex justify-between items-start mb-1">
-                  <h3 class="font-bold text-lg" :title="song.name">
+                  <h3 class="font-bold text-lg truncate" :title="song.name">
                     {{ song.name }}
                   </h3>
                   <div
@@ -189,7 +189,7 @@ function getAudioInfo(position: number) {
                   </div>
                 </div>
 
-                <p class="text-gray-600 mb-2" :title="song.artist">
+                <p class="text-gray-600 mb-2 truncate" :title="song.artist">
                   {{ song.artist }}
                 </p>
 
