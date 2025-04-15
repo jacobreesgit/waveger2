@@ -1,11 +1,21 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useRouter, useRoute } from "vue-router";
-import routerFile from "@/router/index";
+import router from "@/router/index";
 import Menubar from "primevue/menubar";
+import type { MenuItem } from "primevue/menuitem";
 
-const router = useRouter();
-const route = useRoute();
+const menuItems = computed<MenuItem[]>(() => {
+  return router.options.routes
+    .filter((route) => route.meta?.showInNav)
+    .map((route) => ({
+      label: route.meta?.title as string,
+      icon: route.meta?.icon as string,
+      class: route.name === route.name ? "active-route" : "",
+      command: () => {
+        router.push({ name: route.name as string });
+      },
+    }));
+});
 </script>
 
 <template>
@@ -22,12 +32,10 @@ const route = useRoute();
       >
     </div>
 
-    {{ routerFile }}
-
-    <!-- <Menubar
+    <Menubar
       :model="menuItems"
       class="nav-container__nav-menu sm:flex-grow bg-transparent border-none mr-4 sm:mx-4 sm:order-1 order-0"
-    /> -->
+    />
 
     <div class="nav-container__nav-right order-2 sm:order-3">
       <!-- <CountrySelector /> -->
