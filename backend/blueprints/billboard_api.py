@@ -17,9 +17,9 @@ load_dotenv()
 api_key = os.getenv("RAPID_API_KEY")
 
 # Apple Music credentials from .env file
-APPLE_MUSIC_KEY_ID = os.getenv("APPLE_MUSIC_KEY_ID")
-APPLE_MUSIC_TEAM_ID = os.getenv("APPLE_MUSIC_TEAM_ID")
-APPLE_MUSIC_AUTH_KEY = os.getenv("APPLE_MUSIC_AUTH_KEY")
+APPLE_MUSIC_JACOB_KEY_ID = os.getenv("APPLE_MUSIC_JACOB_KEY_ID")
+APPLE_MUSIC_JACOB_TEAM_ID = os.getenv("APPLE_MUSIC_JACOB_TEAM_ID")
+APPLE_MUSIC_JACOB_AUTH_KEY = os.getenv("APPLE_MUSIC_JACOB_AUTH_KEY")
 
 # Create blueprint with prefix
 # No URL prefix means routes will be registered at the root path
@@ -29,7 +29,7 @@ billboard_bp = Blueprint('billboard', __name__, url_prefix='')
 ONE_HOUR = 3600
 ONE_WEEK = 604800
 RATE_LIMIT_TIMEOUT = 300  # 5 minutes - how long to wait when rate limited
-APPLE_MUSIC_TOKEN_TIMEOUT = 11 * 3600  # 11 hours - token expires after 12 hours, refreshing slightly early
+APPLE_MUSIC_JACOB_TOKEN_TIMEOUT = 11 * 3600  # 11 hours - token expires after 12 hours, refreshing slightly early
 
 # ================= Apple Music Service =================
 
@@ -45,7 +45,7 @@ class AppleMusicService:
         Returns:
             str: The Apple Music JWT token or None if generation fails
         """
-        cache_key = "apple_music:token"
+        cache_key = "apple_music_jacob:token"
         token = cache.get(cache_key)
         
         if token:
@@ -59,12 +59,12 @@ class AppleMusicService:
             # Define JWT headers as required by Apple Music API
             headers = {
                 "alg": "ES256",  # Required algorithm
-                "kid": APPLE_MUSIC_KEY_ID  # Key identifier from Apple Developer account
+                "kid": APPLE_MUSIC_JACOB_KEY_ID  # Key identifier from Apple Developer account
             }
             
             # Define JWT payload as required by Apple Music API
             payload = {
-                "iss": APPLE_MUSIC_TEAM_ID,  # Team ID from Apple Developer account
+                "iss": APPLE_MUSIC_JACOB_TEAM_ID,  # Team ID from Apple Developer account
                 "iat": int(time_now.timestamp()),  # Issued at time
                 "exp": int(expiration_time.timestamp())  # Expiration time
             }
@@ -72,13 +72,13 @@ class AppleMusicService:
             # Generate the JWT token with ES256 algorithm
             token = jwt.encode(
                 payload, 
-                APPLE_MUSIC_AUTH_KEY,  # Private key from Apple Developer account
+                APPLE_MUSIC_JACOB_AUTH_KEY,  # Private key from Apple Developer account
                 algorithm='ES256',
                 headers=headers
             )
             
             # Cache the token for slightly less than its full lifetime
-            cache.set(cache_key, token, timeout=APPLE_MUSIC_TOKEN_TIMEOUT)
+            cache.set(cache_key, token, timeout=APPLE_MUSIC_JACOB_TOKEN_TIMEOUT)
             return token
         except Exception as e:
             logger.error(f"Error generating Apple Music token: {e}")
@@ -100,7 +100,7 @@ class AppleMusicService:
             dict: Complete song details from Apple Music API, or None if not found
         """
         # Create a cache key using both title and artist to ensure uniqueness
-        cache_key = f"apple_music:search:{title}:{artist}"
+        cache_key = f"apple_music_jacob:search:{title}:{artist}"
         cached_result = cache.get(cache_key)
         
         if cached_result is not None:  # Allow caching of None results too
@@ -135,29 +135,6 @@ class AppleMusicService:
             if data.get("results", {}).get("songs", {}).get("data"):
                 # Return the complete song object with all data from Apple Music
                 song = data["results"]["songs"]["data"][0]
-                
-                # Log the complete Apple Music data for debugging
-                logger.info(f"Apple Music data for '{title}' by '{artist}':")
-                logger.info(f"Song ID: {song.get('id')}")
-                logger.info(f"Type: {song.get('type')}")
-                
-                # Log all attributes with proper formatting
-                if song.get("attributes"):
-                    logger.info("Song Attributes:")
-                    for key, value in song["attributes"].items():
-                        # Format complex nested objects for better readability
-                        if isinstance(value, dict):
-                            logger.info(f"  {key}: {value}")
-                        elif isinstance(value, list) and len(value) > 0:
-                            logger.info(f"  {key}: {value}")
-                        else:
-                            logger.info(f"  {key}: {value}")
-                
-                # Log relationships if available
-                if song.get("relationships"):
-                    logger.info("Song Relationships:")
-                    for rel_type, rel_data in song["relationships"].items():
-                        logger.info(f"  {rel_type}: {len(rel_data.get('data', []))} items")
                 
                 # Process artwork URL for direct usage (replace placeholders)
                 if song.get("attributes", {}).get("artwork", {}).get("url"):
@@ -208,7 +185,6 @@ class AppleMusicService:
             return data
             
         # Process songs in parallel (max 5 workers to avoid overwhelming)
-        # Always process songs to ensure we have the latest Apple Music data
         songs_to_process = songs
         
         if not songs_to_process:
@@ -221,14 +197,14 @@ class AppleMusicService:
                 song_data = [(s.get("title", s.get("name")), s.get("artist")) for s in songs_to_process]
                 
                 # Search for each song in parallel using the thread pool
-                apple_music_results = list(executor.map(
+                apple_music_jacob_results = list(executor.map(
                     lambda x: AppleMusicService.search_song(*x), 
                     song_data
                 ))
                 
                 # Add results back to songs, maintaining the original list order
-                for song, result in zip(songs_to_process, apple_music_results):
-                    song["apple_music"] = result
+                for song, result in zip(songs_to_process, apple_music_jacob_results):
+                    song["apple_music_jacob"] = result
                     
         except Exception as e:
             logger.error(f"Error enriching chart data with Apple Music: {e}")
@@ -246,7 +222,7 @@ def get_chart():
     - id: The chart ID (default: hot-100)
     - week: Specific week in YYYY-MM-DD format (optional)
     - refresh: Force refresh from API (default: false)
-    - apple_music: Include Apple Music data (default: true)
+    - apple_music_jacob: Include Apple Music data (default: true)
     
     Uses caching strategy based on:
     - Whether it's Tuesday (chart refresh day)
@@ -260,7 +236,7 @@ def get_chart():
     chart_id = request.args.get('id', 'hot-100')
     week = request.args.get('week')
     refresh = request.args.get('refresh', 'false').lower() == 'true'
-    include_apple_music = request.args.get('apple_music', 'true').lower() == 'true'
+    include_apple_music_jacob = request.args.get('apple_music_jacob', 'true').lower() == 'true'
     
     # Create cache key - format: billboard:chart_id:week (if week provided)
     cache_key = f"billboard:{chart_id}" + (f":{week}" if week else "")
@@ -279,7 +255,7 @@ def get_chart():
     # Use cached data if we have it and don't need to refresh
     if not need_api_call and cached_data:
         # Add Apple Music data if requested and not already present
-        if include_apple_music:
+        if include_apple_music_jacob:
             cached_data = AppleMusicService.enrich_chart_data(cached_data)
             
         # Add note if we're rate limited to inform the client
@@ -310,7 +286,7 @@ def get_chart():
         cache.delete("billboard:rate_limited")
         
         # Add Apple Music data if requested
-        if include_apple_music:
+        if include_apple_music_jacob:
             new_data = AppleMusicService.enrich_chart_data(new_data)
         
         # Cache historical data permanently (specific week)
@@ -328,7 +304,7 @@ def get_chart():
             if old_date == new_date:
                 # Data hasn't changed, check again in an hour
                 # Make sure cached data has Apple Music info if requested
-                if include_apple_music:
+                if include_apple_music_jacob:
                     cached_data = AppleMusicService.enrich_chart_data(cached_data)
                 cache.set(cache_key, cached_data, timeout=ONE_HOUR)
                 return jsonify({**cached_data, "cached": True, "note": "No new chart data yet"})
@@ -351,7 +327,7 @@ def get_chart():
             
         # Fall back to cached data if available
         if cached_data:
-            if include_apple_music:
+            if include_apple_music_jacob:
                 cached_data = AppleMusicService.enrich_chart_data(cached_data)
             return jsonify({**cached_data, "cached": True, "note": f"{message}, serving cached data"})
         return jsonify({"error": message, "cached": False, "status_code": response.status_code}), 503
@@ -364,7 +340,7 @@ def get_chart():
         
         # Fall back to cached data if available
         if cached_data:
-            if include_apple_music:
+            if include_apple_music_jacob:
                 cached_data = AppleMusicService.enrich_chart_data(cached_data)
             return jsonify({**cached_data, "cached": True, "note": f"{error_type}: {error_message}, serving cached data"})
         return jsonify({"error": f"{error_type}: {error_message}", "cached": False}), 503
@@ -376,7 +352,7 @@ def get_chart():
         
         # Fall back to cached data if available
         if cached_data:
-            if include_apple_music:
+            if include_apple_music_jacob:
                 cached_data = AppleMusicService.enrich_chart_data(cached_data)
             return jsonify({**cached_data, "cached": True, "note": f"{error_message}, serving cached data"})
         return jsonify({"error": error_message, "cached": False}), 503
