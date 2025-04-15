@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, watch, onUnmounted } from "vue";
+import { ref, onMounted, nextTick, watch, onUnmounted } from "vue";
 import LoadingSpinner from "@/components/LoadingSpinner.vue";
 import { useChartStore } from "@/stores/chartStore";
 
@@ -11,7 +11,14 @@ const playingTrackId = ref<number | null>(null);
 const audioProgress = ref<Record<number, number>>({});
 const flippedCards = ref<Record<number, boolean>>({});
 
-// Card height management - simpler approach
+// Favorite tracks (no real functionality)
+const favoriteTracks = ref<Record<number, boolean>>({});
+
+// Web Audio API components
+const audioContext = ref<AudioContext | null>(null);
+const analyser = ref<AnalyserNode | null>(null);
+
+// Card height management
 const maxCardHeight = ref(0);
 
 // Watch for chart data changes and update card heights
@@ -31,11 +38,26 @@ watch(
 // Update card heights when window is resized
 onMounted(() => {
   window.addEventListener("resize", updateCardHeights);
-  // Clean up on unmount
+  // Initialize Web Audio API
+  try {
+    audioContext.value = new (window.AudioContext ||
+      (window as any).webkitAudioContext)();
+    analyser.value = audioContext.value.createAnalyser();
+    analyser.value.connect(audioContext.value.destination);
+  } catch (e) {
+    console.warn("Web Audio API not supported:", e);
+  }
 });
 
 onUnmounted(() => {
   window.removeEventListener("resize", updateCardHeights);
+  if (currentAudio.value) {
+    currentAudio.value.pause();
+    currentAudio.value = null;
+  }
+  if (audioContext.value && audioContext.value.state !== "closed") {
+    audioContext.value.close();
+  }
 });
 
 // Simpler function to update card heights
@@ -59,8 +81,16 @@ function toggleFlip(position: number) {
   flippedCards.value[position] = !flippedCards.value[position];
 }
 
+// Toggle favorite status
+function toggleFavorite(position: number, event?: Event) {
+  if (event) {
+    event.stopPropagation();
+  }
+  favoriteTracks.value[position] = !favoriteTracks.value[position];
+}
+
 // Play preview if available
-function playPreview(
+async function playPreview(
   previewUrl: string | null,
   position: number,
   event?: Event
@@ -81,28 +111,44 @@ function playPreview(
     }
   }
 
-  if (previewUrl) {
-    const audio = new Audio(previewUrl);
-
-    // Set up progress tracking
-    audio.ontimeupdate = () => {
-      if (audio.duration) {
-        audioProgress.value[position] =
-          (audio.currentTime / audio.duration) * 100;
+  if (previewUrl && audioContext.value) {
+    try {
+      // Resume audio context if suspended (needed for browser autoplay policies)
+      if (audioContext.value.state === "suspended") {
+        await audioContext.value.resume();
       }
-    };
 
-    audio.play();
-    currentAudio.value = audio;
-    playingTrackId.value = position;
-    audioProgress.value[position] = 0;
+      // Create a new audio element
+      const audio = new Audio(previewUrl);
+      audio.crossOrigin = "anonymous";
 
-    // Reset when playback ends
-    audio.onended = () => {
-      playingTrackId.value = null;
-      currentAudio.value = null;
+      // Create a media element source and connect to analyzer
+      const source = audioContext.value.createMediaElementSource(audio);
+      source.connect(analyser.value as AnalyserNode);
+
+      // Set up progress tracking
+      audio.ontimeupdate = () => {
+        if (audio.duration) {
+          audioProgress.value[position] =
+            (audio.currentTime / audio.duration) * 100;
+        }
+      };
+
+      // Start playback
+      audio.play();
+      currentAudio.value = audio;
+      playingTrackId.value = position;
       audioProgress.value[position] = 0;
-    };
+
+      // Reset when playback ends
+      audio.onended = () => {
+        playingTrackId.value = null;
+        currentAudio.value = null;
+        audioProgress.value[position] = 0;
+      };
+    } catch (error) {
+      console.error("Error playing audio:", error);
+    }
   }
 }
 
@@ -128,22 +174,6 @@ function getPositionChangeClass(
   return diff > 0 ? "text-green-500" : "text-red-500";
 }
 
-// Generate waveform data
-function generateWaveformData(position: number): number[] {
-  // Pseudo-random but consistent per position
-  const seed = position * 13;
-  const bars = 16;
-  const result = [];
-
-  for (let i = 0; i < bars; i++) {
-    // Generate a value between 0.2 and 1.0 based on position
-    const val = 0.2 + (((seed + i * 7) % 100) / 100) * 0.8;
-    result.push(val);
-  }
-
-  return result;
-}
-
 // Compute if audio is playing and get normalized progress (0-1)
 function getAudioInfo(position: number) {
   const isPlaying = playingTrackId.value === position;
@@ -153,6 +183,17 @@ function getAudioInfo(position: number) {
     isPlaying,
     progress: progress / 100,
   };
+}
+
+// Get position badge color based on chart position
+function getPositionBadgeColor(position: number) {
+  if (position === 1) return "bg-yellow-500 text-black"; // Gold for #1
+  if (position === 2) return "bg-gray-300 text-black"; // Silver for #2
+  if (position === 3) return "bg-amber-700 text-white"; // Bronze for #3
+  if (position <= 10) return "bg-red-600 text-white"; // Red for top 10
+  if (position <= 20) return "bg-purple-600 text-white"; // Purple for top 20
+  if (position <= 50) return "bg-blue-600 text-white"; // Blue for top 50
+  return "bg-black bg-opacity-70 text-white"; // Default black
 }
 </script>
 
@@ -169,7 +210,7 @@ function getAudioInfo(position: number) {
       :class="{ 'opacity-25': chartStore.isLoading }"
     >
       <div
-        class="chart-view__chart-header p-6 flex flex-col items-center gap-2 mb-6"
+        class="chart-view__chart-header p-6 flex flex-col items-center gap-2 mb-6 bg-gradient-to-r from-indigo-700 to-purple-700 text-white rounded-lg"
       >
         <h1 class="text-3xl font-bold">{{ chartStore.chartData.title }}</h1>
         <p
@@ -177,7 +218,9 @@ function getAudioInfo(position: number) {
         >
           {{ chartStore.chartData.info }}
         </p>
-        <p class="chart-view__chart-header__chart-week font-medium mt-2">
+        <p
+          class="chart-view__chart-header__chart-week font-medium mt-2 bg-white/20 px-4 py-1 rounded-full"
+        >
           {{ chartStore.chartData.week }}
         </p>
       </div>
@@ -208,9 +251,25 @@ function getAudioInfo(position: number) {
                     @load="updateCardHeights"
                   />
                   <div
-                    class="absolute top-0 left-0 m-2 bg-black bg-opacity-70 text-white font-bold rounded-full w-10 h-10 flex items-center justify-center"
+                    class="absolute top-0 left-0 m-2 font-bold rounded-full w-10 h-10 flex items-center justify-center"
+                    :class="getPositionBadgeColor(song.position)"
                   >
                     {{ song.position }}
+                  </div>
+
+                  <div
+                    class="absolute top-0 right-0 m-2"
+                    @click="toggleFavorite(song.position, $event)"
+                  >
+                    <span
+                      class="favourite-btn cursor-pointer text-xl"
+                      :class="{
+                        'pi pi-heart-fill text-red-500':
+                          favoriteTracks[song.position],
+                        'pi pi-heart text-red-700':
+                          !favoriteTracks[song.position],
+                      }"
+                    ></span>
                   </div>
                 </div>
 
@@ -280,9 +339,25 @@ function getAudioInfo(position: number) {
 
                 <!-- Position Badge -->
                 <div
-                  class="absolute top-0 left-0 m-3 text-white font-bold text-lg z-10"
+                  class="absolute top-0 left-0 m-2 font-bold rounded-full w-10 h-10 flex items-center justify-center z-10"
+                  :class="getPositionBadgeColor(song.position)"
                 >
-                  #{{ song.position }}
+                  {{ song.position }}
+                </div>
+
+                <!-- Back Favorite Button -->
+                <div
+                  class="absolute top-0 right-0 m-2 z-10"
+                  @click="toggleFavorite(song.position, $event)"
+                >
+                  <span
+                    class="favourite-btn cursor-pointer text-2xl"
+                    :class="{
+                      'pi pi-heart-fill text-red-500':
+                        favoriteTracks[song.position],
+                      'pi pi-heart text-white': !favoriteTracks[song.position],
+                    }"
+                  ></span>
                 </div>
 
                 <!-- Central content -->
@@ -326,29 +401,11 @@ function getAudioInfo(position: number) {
                       >
                         <span
                           v-if="playingTrackId === song.position"
-                          class="pi pi-pause-circle text-2xl"
+                          class="pi pi-pause-circle"
                         ></span>
-                        <span v-else class="pi pi-play-circle text-2xl"></span>
+                        <span v-else class="pi pi-play-circle"></span>
                       </div>
                     </div>
-                  </div>
-
-                  <!-- Waveform visualization -->
-                  <div
-                    class="waveform-container"
-                    :class="{ active: playingTrackId === song.position }"
-                  >
-                    <div
-                      v-for="(barHeight, index) in generateWaveformData(
-                        song.position
-                      )"
-                      :key="index"
-                      class="waveform-bar"
-                      :style="{
-                        height: `${barHeight * 40}px`,
-                        animationDelay: `${index * 0.05}s`,
-                      }"
-                    ></div>
                   </div>
                 </div>
               </div>
@@ -441,36 +498,21 @@ function getAudioInfo(position: number) {
   }
 }
 
-.waveform-container {
+.favourite-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  height: 40px;
-  width: 80%;
+  height: 32px;
+  width: 32px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
 
-  &.active .waveform-bar {
-    animation: equalizer 0.8s infinite alternate;
+  &:hover {
+    transform: scale(1.1);
   }
 
-  .waveform-bar {
-    width: 4px;
-    background: rgba(255, 255, 255, 0.5);
-    border-radius: 2px;
-    transition: height 0.3s ease;
-
-    &:nth-child(odd) {
-      background: rgba(255, 255, 255, 0.7);
-    }
-  }
-}
-
-@keyframes equalizer {
-  0% {
-    transform: scaleY(0.8);
-  }
-  100% {
-    transform: scaleY(1.2);
+  &:active {
+    transform: scale(0.95);
   }
 }
 </style>
