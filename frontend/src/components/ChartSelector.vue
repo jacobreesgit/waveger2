@@ -43,8 +43,12 @@ watch(
 </script>
 
 <template>
-  <div class="chart-selector grow">
+  <div class="chart-selector grow flex flex-col gap-1">
+    <label for="chart-select" class="block text-sm font-medium text-gray-700"
+      >Select Chart</label
+    >
     <Select
+      id="chart-select"
       v-model="selectedChartId"
       :options="chartOptions"
       optionLabel="title"
