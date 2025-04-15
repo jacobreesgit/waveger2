@@ -7,6 +7,7 @@ from cache_extension import cache
 from datetime import datetime, timedelta
 import jwt
 import concurrent.futures
+import re
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -85,12 +86,27 @@ class AppleMusicService:
             return None
     
     @staticmethod
+    def standardize_artwork_url(url):
+        """
+        Standardize artwork URL to always use 1000x1000 dimensions.
+        
+        Args:
+            url (str): The artwork URL to standardize
+            
+        Returns:
+            str: Standardized artwork URL with 1000x1000 dimensions
+        """
+        if not url:
+            return url
+            
+        # Simple replacement of any size with 1000x1000
+        # This pattern matches URLs like "https://...300x300bb.jpg"
+        return re.sub(r'/\d+x\d+bb\.jpg', '/1000x1000bb.jpg', url)
+    
+    @staticmethod
     def search_song(title, artist):
         """
         Search Apple Music for a song by title and artist.
-        
-        Creates a cache key based on title and artist to avoid repeated API calls.
-        Returns song information including preview URL and artwork.
         
         Args:
             title (str): The song title to search for
@@ -104,6 +120,9 @@ class AppleMusicService:
         cached_result = cache.get(cache_key)
         
         if cached_result is not None:  # Allow caching of None results too
+            # Always standardize artwork URL for cached results
+            if cached_result and "artwork_url" in cached_result:
+                cached_result["artwork_url"] = AppleMusicService.standardize_artwork_url(cached_result["artwork_url"])
             return cached_result
         
         token = AppleMusicService.get_token()
@@ -111,12 +130,8 @@ class AppleMusicService:
             return None
             
         try:
-            # Use requests' params argument to properly handle URL encoding
-            # Let the requests library handle parameter encoding
             url = "https://api.music.apple.com/v1/catalog/us/search"
             headers = {"Authorization": f"Bearer {token}"}
-            
-            # Combine title and artist, optionally replace ampersands for better search results
             search_term = f"{title} {artist}"
             
             params = {
@@ -125,23 +140,24 @@ class AppleMusicService:
                 'limit': 1
             }
             
-            # Make the API request with a timeout to prevent hanging
             response = requests.get(url, headers=headers, params=params, timeout=5)
             response.raise_for_status()
             data = response.json()
             
-            # Extract relevant song information from the response
+            # Extract song information and standardize artwork URL
             result = None
             if data.get("results", {}).get("songs", {}).get("data"):
                 song = data["results"]["songs"]["data"][0]
+                artwork_url = song["attributes"].get("artwork", {}).get("url", "")
+                
                 result = {
                     "id": song["id"],
                     "url": song["attributes"]["url"],
                     "preview_url": song["attributes"].get("previews", [{}])[0].get("url") if song["attributes"].get("previews") else None,
-                    "artwork_url": song["attributes"].get("artwork", {}).get("url", "").replace("{w}", "1000").replace("{h}", "1000")
+                    "artwork_url": AppleMusicService.standardize_artwork_url(artwork_url)
                 }
             
-            # Cache results for 24 hours - including null results to prevent repeated failed lookups
+            # Cache results for 24 hours
             cache.set(cache_key, result, timeout=24*60*60)
             return result
             
@@ -154,36 +170,36 @@ class AppleMusicService:
     @staticmethod
     def enrich_chart_data(data):
         """
-        Add Apple Music data to chart entries in parallel.
-        
-        Processes songs in batch using a thread pool to avoid slowing down the response.
-        Only processes songs that don't already have Apple Music data to avoid redundant API calls.
+        Add Apple Music data to chart entries and standardize artwork URLs.
         
         Args:
             data (dict): Billboard chart data to enrich
             
         Returns:
-            dict: The same chart data with Apple Music information added
+            dict: The chart data with standardized artwork URLs and Apple Music info
         """
         if not data:
             return data
             
-        # Determine the song list structure - handle different API response formats
+        # Determine the song list structure
         songs = []
         if "chart" in data and "entries" in data["chart"]:
             songs = data["chart"]["entries"]
         elif "songs" in data:
             songs = data["songs"]
         else:
-            # Unknown structure
+            return data
+        
+        # First, standardize artwork URLs for existing Apple Music data
+        for song in songs:
+            if "apple_music" in song and song["apple_music"] and "artwork_url" in song["apple_music"]:
+                song["apple_music"]["artwork_url"] = AppleMusicService.standardize_artwork_url(song["apple_music"]["artwork_url"])
+            
+        # If songs already have Apple Music data, we're done
+        if songs and all("apple_music" in song for song in songs):
             return data
             
-        # Skip processing if songs already have Apple Music data
-        if songs and "apple_music" in songs[0]:
-            return data
-            
-        # Process songs in parallel (max 5 workers to avoid overwhelming)
-        # Only process songs that don't already have Apple Music data
+        # Process songs that don't have Apple Music data
         songs_to_process = [s for s in songs if "apple_music" not in s]
         
         if not songs_to_process:
@@ -192,16 +208,15 @@ class AppleMusicService:
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
                 # Map songs to their titles and artists
-                # Handle different property names (title/name) depending on the API response format
                 song_data = [(s.get("title", s.get("name")), s.get("artist")) for s in songs_to_process]
                 
-                # Search for each song in parallel using the thread pool
+                # Search for each song in parallel
                 apple_music_results = list(executor.map(
                     lambda x: AppleMusicService.search_song(*x), 
                     song_data
                 ))
                 
-                # Add results back to songs, maintaining the original list order
+                # Add results back to songs
                 for song, result in zip(songs_to_process, apple_music_results):
                     song["apple_music"] = result
                     

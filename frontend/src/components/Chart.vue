@@ -1,14 +1,58 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, nextTick, watch, onUnmounted } from "vue";
 import LoadingSpinner from "@/components/LoadingSpinner.vue";
 import { useChartStore } from "@/stores/chartStore";
 
 const chartStore = useChartStore();
 
+// Audio management
 const currentAudio = ref<HTMLAudioElement | null>(null);
 const playingTrackId = ref<number | null>(null);
 const audioProgress = ref<Record<number, number>>({});
 const flippedCards = ref<Record<number, boolean>>({});
+
+// Card height management - simpler approach
+const maxCardHeight = ref(0);
+
+// Watch for chart data changes and update card heights
+watch(
+  () => chartStore.chartData,
+  async () => {
+    if (chartStore.chartData) {
+      // Wait for the DOM to update before measuring
+      await nextTick();
+      // Set timeout for any image loading
+      setTimeout(updateCardHeights, 100);
+    }
+  },
+  { immediate: true }
+);
+
+// Update card heights when window is resized
+onMounted(() => {
+  window.addEventListener("resize", updateCardHeights);
+  // Clean up on unmount
+});
+
+onUnmounted(() => {
+  window.removeEventListener("resize", updateCardHeights);
+});
+
+// Simpler function to update card heights
+function updateCardHeights() {
+  maxCardHeight.value = 0; // Reset measurement
+
+  // Calculate the height after next render cycle
+  nextTick(() => {
+    const cardElements = document.querySelectorAll(".card-front");
+    cardElements.forEach((card) => {
+      const height = card.scrollHeight;
+      if (height > maxCardHeight.value) {
+        maxCardHeight.value = height;
+      }
+    });
+  });
+}
 
 // Toggle card flip state
 function toggleFlip(position: number) {
@@ -146,162 +190,171 @@ function getAudioInfo(position: number) {
           @mouseenter="toggleFlip(song.position)"
           @mouseleave="toggleFlip(song.position)"
         >
-          <transition name="p-flip" mode="out-in">
-            <!-- Front card -->
-            <div
-              v-if="!flippedCards[song.position]"
-              class="card-face bg-white rounded-lg shadow-md flex flex-col"
-            >
-              <div class="relative">
-                <img
-                  :src="song.apple_music?.artwork_url || song.image"
-                  :alt="`${song.name} by ${song.artist}`"
-                  class="w-full aspect-square object-cover"
-                />
-                <div
-                  class="absolute top-0 left-0 m-2 bg-black bg-opacity-70 text-white font-bold rounded-full w-10 h-10 flex items-center justify-center"
-                >
-                  {{ song.position }}
-                </div>
-              </div>
-
-              <div class="p-4 flex flex-col flex-grow">
-                <div class="flex justify-between items-start mb-1">
-                  <h3 class="font-bold text-lg" :title="song.name">
-                    {{ song.name }}
-                  </h3>
-                  <div
-                    :class="
-                      getPositionChangeClass(
-                        song.position,
-                        song.last_week_position
-                      )
-                    "
-                    class="text-sm font-bold ml-2 whitespace-nowrap"
-                  >
-                    {{
-                      formatPositionChange(
-                        song.position,
-                        song.last_week_position
-                      )
-                    }}
-                  </div>
-                </div>
-
-                <p class="text-gray-600 mb-2" :title="song.artist">
-                  {{ song.artist }}
-                </p>
-
-                <div
-                  class="mt-auto pt-3 border-t border-gray-100 text-sm text-gray-500 flex justify-between"
-                >
-                  <div>
-                    Peak:
-                    <span class="font-medium">{{ song.peak_position }}</span>
-                  </div>
-                  <div>
-                    Weeks:
-                    <span class="font-medium">{{ song.weeks_on_chart }}</span>
-                  </div>
-                  <div v-if="song.last_week_position">
-                    Last Week:
-                    <span class="font-medium">{{
-                      song.last_week_position
-                    }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Back card -->
-            <div
-              v-else
-              class="card-face rounded-lg shadow-lg flex flex-col"
-              :style="{
-                backgroundImage: `url(${
-                  song.apple_music?.artwork_url || song.image
-                })`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-              }"
-            >
+          <!-- Fixed height container using CSS Custom Properties -->
+          <div
+            class="card-wrapper"
+            :style="{ '--min-card-height': `${maxCardHeight}px` }"
+          >
+            <transition name="p-flip" mode="out-in">
+              <!-- Front card - Note the card-front class for height measurement -->
               <div
-                class="absolute inset-0 backdrop-blur-sm bg-black/55 rounded-lg"
-              ></div>
-
-              <!-- Position Badge -->
-              <div
-                class="absolute top-0 left-0 m-3 text-white font-bold text-lg z-10"
+                v-if="!flippedCards[song.position]"
+                class="card-face card-front bg-white rounded-lg shadow-md flex flex-col"
               >
-                #{{ song.position }}
-              </div>
-
-              <!-- Central content -->
-              <div
-                class="relative z-10 p-6 flex flex-col items-center justify-center h-full text-white gap-6"
-              >
-                <!-- Song Title -->
-                <h3 class="font-bold text-xl text-center">{{ song.name }}</h3>
-
-                <!-- Artist -->
-                <p class="text-gray-300 text-center">{{ song.artist }}</p>
-
-                <!-- Play Button -->
-                <div
-                  v-if="song.apple_music?.preview_url"
-                  class="play-button-container relative cursor-pointer"
-                  @click="
-                    playPreview(
-                      song.apple_music?.preview_url,
-                      song.position,
-                      $event
-                    )
-                  "
-                >
-                  <!-- Circular progress -->
+                <div class="relative">
+                  <img
+                    :src="song.apple_music?.artwork_url || song.image"
+                    :alt="`${song.name} by ${song.artist}`"
+                    class="w-full aspect-square object-cover"
+                    @load="updateCardHeights"
+                  />
                   <div
-                    class="circular-progress"
-                    :style="{
-                      background: `conic-gradient(
-                        rgba(255, 255, 255, 0.8) ${
-                          getAudioInfo(song.position).progress * 360
-                        }deg,
-                        rgba(255, 255, 255, 0.2) ${
-                          getAudioInfo(song.position).progress * 360
-                        }deg
-                      )`,
-                    }"
+                    class="absolute top-0 left-0 m-2 bg-black bg-opacity-70 text-white font-bold rounded-full w-10 h-10 flex items-center justify-center"
                   >
-                    <div class="inner-circle flex items-center justify-center">
-                      <span
-                        v-if="playingTrackId === song.position"
-                        class="pi pi-pause-circle text-2xl"
-                      ></span>
-                      <span v-else class="pi pi-play-circle text-2xl"></span>
+                    {{ song.position }}
+                  </div>
+                </div>
+
+                <div class="p-4 flex flex-col flex-grow">
+                  <div class="flex justify-between items-start mb-1">
+                    <h3 class="font-bold text-lg" :title="song.name">
+                      {{ song.name }}
+                    </h3>
+                    <div
+                      :class="
+                        getPositionChangeClass(
+                          song.position,
+                          song.last_week_position
+                        )
+                      "
+                      class="text-sm font-bold ml-2 whitespace-nowrap"
+                    >
+                      {{
+                        formatPositionChange(
+                          song.position,
+                          song.last_week_position
+                        )
+                      }}
+                    </div>
+                  </div>
+
+                  <p class="text-gray-600 mb-2" :title="song.artist">
+                    {{ song.artist }}
+                  </p>
+
+                  <div
+                    class="mt-auto pt-3 border-t border-gray-100 text-sm text-gray-500 flex justify-between"
+                  >
+                    <div>
+                      Peak:
+                      <span class="font-medium">{{ song.peak_position }}</span>
+                    </div>
+                    <div>
+                      Weeks:
+                      <span class="font-medium">{{ song.weeks_on_chart }}</span>
+                    </div>
+                    <div v-if="song.last_week_position">
+                      Last Week:
+                      <span class="font-medium">{{
+                        song.last_week_position
+                      }}</span>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                <!-- Waveform visualization -->
+              <!-- Back card -->
+              <div
+                v-else
+                class="card-face card-back rounded-lg shadow-lg flex flex-col"
+                :style="{
+                  backgroundImage: `url(${
+                    song.apple_music?.artwork_url || song.image
+                  })`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }"
+              >
                 <div
-                  class="waveform-container"
-                  :class="{ active: playingTrackId === song.position }"
+                  class="absolute inset-0 backdrop-blur-sm bg-black/55 rounded-lg"
+                ></div>
+
+                <!-- Position Badge -->
+                <div
+                  class="absolute top-0 left-0 m-3 text-white font-bold text-lg z-10"
                 >
+                  #{{ song.position }}
+                </div>
+
+                <!-- Central content -->
+                <div
+                  class="relative z-10 p-6 flex flex-col items-center justify-center h-full text-white gap-6"
+                >
+                  <!-- Song Title -->
+                  <h3 class="font-bold text-xl text-center">{{ song.name }}</h3>
+
+                  <!-- Artist -->
+                  <p class="text-gray-300 text-center">{{ song.artist }}</p>
+
+                  <!-- Play Button -->
                   <div
-                    v-for="(barHeight, index) in generateWaveformData(
-                      song.position
-                    )"
-                    :key="index"
-                    class="waveform-bar"
-                    :style="{
-                      height: `${barHeight * 40}px`,
-                      animationDelay: `${index * 0.05}s`,
-                    }"
-                  ></div>
+                    v-if="song.apple_music?.preview_url"
+                    class="play-button-container relative cursor-pointer"
+                    @click="
+                      playPreview(
+                        song.apple_music?.preview_url,
+                        song.position,
+                        $event
+                      )
+                    "
+                  >
+                    <!-- Circular progress -->
+                    <div
+                      class="circular-progress"
+                      :style="{
+                        background: `conic-gradient(
+                          rgba(255, 255, 255, 0.8) ${
+                            getAudioInfo(song.position).progress * 360
+                          }deg,
+                          rgba(255, 255, 255, 0.2) ${
+                            getAudioInfo(song.position).progress * 360
+                          }deg
+                        )`,
+                      }"
+                    >
+                      <div
+                        class="inner-circle flex items-center justify-center"
+                      >
+                        <span
+                          v-if="playingTrackId === song.position"
+                          class="pi pi-pause-circle text-2xl"
+                        ></span>
+                        <span v-else class="pi pi-play-circle text-2xl"></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Waveform visualization -->
+                  <div
+                    class="waveform-container"
+                    :class="{ active: playingTrackId === song.position }"
+                  >
+                    <div
+                      v-for="(barHeight, index) in generateWaveformData(
+                        song.position
+                      )"
+                      :key="index"
+                      class="waveform-bar"
+                      :style="{
+                        height: `${barHeight * 40}px`,
+                        animationDelay: `${index * 0.05}s`,
+                      }"
+                    ></div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </transition>
+            </transition>
+          </div>
         </div>
       </div>
     </div>
@@ -343,12 +396,20 @@ function getAudioInfo(position: number) {
   display: flex;
 }
 
+/* Uses CSS custom properties for dynamic height */
+.card-wrapper {
+  width: 100%;
+  min-height: var(--min-card-height, auto);
+  display: flex;
+}
+
 .card-face {
   position: relative;
   width: 100%;
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  /* Ensure both card faces have the same min-height */
+  min-height: var(--min-card-height, auto);
 }
 
 .play-button-container {
