@@ -25,3 +25,8 @@
     width: max-content;
   }
 }
+
+.play-icon,
+.pause-icon {
+  font-size: 1.5rem;
+}

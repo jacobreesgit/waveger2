@@ -402,12 +402,12 @@ function getPositionBadgeColor(position: number) {
                         <font-awesome-icon
                           v-if="playingTrackId === song.position"
                           :icon="['fas', 'pause']"
-                          size="lg"
+                          class="pause-icon"
                         />
                         <font-awesome-icon
                           v-else
                           :icon="['fas', 'play']"
-                          size="lg"
+                          class="play-icon"
                         />
                       </div>
                     </div>
