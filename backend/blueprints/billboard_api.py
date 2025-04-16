@@ -20,11 +20,7 @@ api_key = os.getenv("RAPID_API_KEY")
 # Apple Music credentials from .env file
 APPLE_MUSIC_KEY_ID = os.getenv("APPLE_MUSIC_KEY_ID")
 APPLE_MUSIC_TEAM_ID = os.getenv("APPLE_MUSIC_TEAM_ID")
-
-# Load Apple Music auth key from file
-key_path = os.getenv("APPLE_MUSIC_AUTH_KEY_FILE", "keys/apple_music_auth_key.p8")
-with open(key_path, 'r') as key_file:
-    APPLE_MUSIC_AUTH_KEY = key_file.read()
+APPLE_MUSIC_AUTH_KEY = os.getenv("APPLE_MUSIC_AUTH_KEY")
 
 # Create blueprint with prefix
 # No URL prefix means routes will be registered at the root path
