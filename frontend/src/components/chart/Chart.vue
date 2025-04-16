@@ -76,6 +76,11 @@ watch(
   { immediate: true }
 );
 
+// Reset flipped cards when chart changes
+watch([() => chartStore.chartId, () => chartStore.selectedDate], () => {
+  flippedCards.value = {};
+});
+
 // Setup event listeners and audio context
 onMounted(() => {
   window.addEventListener("resize", updateCardHeights);
@@ -199,7 +204,7 @@ function handleVolumeChange(newVolume: number) {
         <div
           v-else
           v-for="song in filteredSongs"
-          :key="`card-${song.position}`"
+          :key="`card-${song.position}-${chartStore.chartId}-${chartStore.selectedDate}`"
           class="chart-card-container w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1rem)] xl:w-[calc(25%-1rem)]"
         >
           <!-- Normal cards if we have basic data -->

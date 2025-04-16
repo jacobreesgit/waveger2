@@ -14,7 +14,7 @@ const props = defineProps<{
   flipped: boolean;
   playingTrackId: number | null;
   audioInfo: { progress: number };
-  loading?: boolean; // Add loading prop
+  loading?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -27,6 +27,13 @@ const emit = defineEmits<{
 // Track favorited state
 const isFavorite = ref(false);
 const volume = ref(0.8);
+// Track image loading state
+const imageLoaded = ref(false);
+
+// Handle image load event
+function handleImageLoaded() {
+  imageLoaded.value = true;
+}
 
 // Toggle favorite status
 function toggleFavorite(event?: Event) {
@@ -73,8 +80,8 @@ function openChartLink(url: string, event?: Event) {
 </script>
 
 <template>
-  <!-- Skeleton Card when loading -->
-  <div v-if="loading" class="card-wrapper">
+  <!-- Skeleton Card when loading or image not loaded -->
+  <div v-if="props.loading || !imageLoaded" class="card-wrapper">
     <div
       class="card-face overflow-hidden card-front bg-white rounded-lg shadow-md flex flex-col h-full"
     >
@@ -99,9 +106,17 @@ function openChartLink(url: string, event?: Event) {
         </div>
       </div>
     </div>
+
+    <!-- Image preloader -->
+    <img
+      :src="song.apple_music?.artwork_url || song.image"
+      @load="handleImageLoaded"
+      alt="preload"
+      class="hidden"
+    />
   </div>
 
-  <!-- Regular Card when not loading -->
+  <!-- Regular Card when not loading and image is loaded -->
   <div v-else class="card-wrapper" @click="emit('flip', song.position)">
     <transition name="p-flip" mode="out-in">
       <!-- Front card -->
