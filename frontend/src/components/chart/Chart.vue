@@ -126,7 +126,7 @@ function handleVolumeChange(newVolume: number) {
     ></LoadingSpinner>
 
     <div
-      v-if="chartStore.chartData"
+      v-else
       class="chart-view w-full"
       :class="{ 'opacity-25': chartStore.isLoading }"
     >

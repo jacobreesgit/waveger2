@@ -38,7 +38,9 @@ export const useChartStore = defineStore("chart", {
       }
 
       try {
-        this.chartData = await fetchChartData(chartId, dateStr, refresh);
+        // Keep the old data until we have new data
+        const newChartData = await fetchChartData(chartId, dateStr, refresh);
+        this.chartData = newChartData;
 
         if (import.meta.env.DEV) {
           console.log(
