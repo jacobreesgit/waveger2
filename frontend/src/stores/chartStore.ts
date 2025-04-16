@@ -3,17 +3,27 @@ import { fetchChartData } from "@/services/api";
 import { formatToday } from "@/utils/dateUtils";
 import type { ChartData } from "@/utils/types";
 
+// Simple storage keys
+const STORAGE_KEY_CHART_ID = "waveger_chart_id";
+const STORAGE_KEY_DATE = "waveger_date";
+const STORAGE_KEY_CACHE = "waveger_cache";
+
+// Type for our cache object
+type ChartCache = Record<string, ChartData>;
+
 export const useChartStore = defineStore("chart", {
   state: () => {
-    const state = {
+    return {
       chartData: null as ChartData | null,
       isLoading: false,
       error: null as string | null,
-      chartId: "hot-100",
-      selectedDate: formatToday(),
-    };
 
-    return state;
+      // Load last selected chart ID or use default
+      chartId: sessionStorage.getItem(STORAGE_KEY_CHART_ID) || "hot-100",
+
+      // Load last selected date or use today
+      selectedDate: sessionStorage.getItem(STORAGE_KEY_DATE) || formatToday(),
+    };
   },
 
   actions: {
@@ -29,59 +39,64 @@ export const useChartStore = defineStore("chart", {
       this.chartId = chartId;
       if (week) this.selectedDate = week;
 
-      if (import.meta.env.DEV) {
-        console.log("[ChartStore] Fetching chart with:", {
-          chartId,
-          dateStr,
-          refresh,
-        });
-      }
+      // Save selections to sessionStorage
+      sessionStorage.setItem(STORAGE_KEY_CHART_ID, chartId);
+      sessionStorage.setItem(STORAGE_KEY_DATE, this.selectedDate);
+
+      // Create cache key
+      const cacheKey = `${chartId}-${dateStr}`;
 
       try {
-        // Keep the old data until we have new data
+        if (!refresh) {
+          // Try to get cached data first
+          const cachedData = sessionStorage.getItem(STORAGE_KEY_CACHE);
+          if (cachedData) {
+            const cache = JSON.parse(cachedData) as ChartCache;
+            if (cache[cacheKey]) {
+              this.chartData = cache[cacheKey];
+              this.isLoading = false;
+              return;
+            }
+          }
+        }
+
+        // No cache or forced refresh - fetch from API
         const newChartData = await fetchChartData(chartId, dateStr, refresh);
         this.chartData = newChartData;
 
-        if (import.meta.env.DEV) {
-          console.log(
-            "[ChartStore] Chart data loaded successfully:",
-            this.chartData
-          );
+        // Update cache
+        let cache: ChartCache = {};
+        const cachedData = sessionStorage.getItem(STORAGE_KEY_CACHE);
+        if (cachedData) {
+          cache = JSON.parse(cachedData) as ChartCache;
         }
+
+        cache[cacheKey] = newChartData;
+        sessionStorage.setItem(STORAGE_KEY_CACHE, JSON.stringify(cache));
       } catch (error) {
         this.error =
           error instanceof Error ? error.message : "Failed to load chart data";
-
-        if (import.meta.env.DEV) {
-          console.error("[ChartStore] Error loading chart data:", this.error);
-        }
       } finally {
         this.isLoading = false;
       }
     },
 
     changeChart(id: string) {
-      if (import.meta.env.DEV) {
-        console.log("[ChartStore] Changing chart to:", id);
+      if (id !== this.chartId) {
+        this.fetchChart(id);
       }
-      this.fetchChart(id);
     },
 
     setDate(date: string) {
-      if (import.meta.env.DEV) {
-        console.log("[ChartStore] Setting date to:", date);
+      if (date !== this.selectedDate) {
+        this.selectedDate = date;
+        this.fetchChart();
       }
-      this.selectedDate = date;
-      this.fetchChart();
     },
 
     setToday() {
       const today = formatToday();
-      if (import.meta.env.DEV) {
-        console.log("[ChartStore] Setting date to today:", today);
-      }
-      this.selectedDate = today;
-      this.fetchChart();
+      this.setDate(today);
     },
   },
 });

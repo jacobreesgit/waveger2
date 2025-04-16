@@ -136,7 +136,8 @@ class AppleMusicService:
             params = {
                 'term': search_term,
                 'types': 'songs',
-                'limit': 1
+                'limit': 1,
+                'include': 'albums'
             }
             
             response = requests.get(url, headers=headers, params=params, timeout=5)
@@ -147,13 +148,41 @@ class AppleMusicService:
             result = None
             if data.get("results", {}).get("songs", {}).get("data"):
                 song = data["results"]["songs"]["data"][0]
-                artwork_url = song["attributes"].get("artwork", {}).get("url", "")
+                attributes = song["attributes"]
+                artwork_url = attributes.get("artwork", {}).get("url", "")
+                
+                # Gather album information if available
+                album_info = {}
+                if "relationships" in song and "albums" in song["relationships"] and song["relationships"]["albums"]["data"]:
+                    album = song["relationships"]["albums"]["data"][0]["attributes"]
+                    album_info = {
+                        "album_name": album.get("name"),
+                        "album_id": song["relationships"]["albums"]["data"][0].get("id"),
+                        "album_url": album.get("url"),
+                        "release_date": album.get("releaseDate"),
+                        "record_label": album.get("recordLabel"),
+                        "copyright": album.get("copyright"),
+                        "genre_names": album.get("genreNames", []),
+                        "is_compilation": album.get("isCompilation", False),
+                        "track_count": album.get("trackCount")
+                    }
                 
                 result = {
                     "id": song["id"],
-                    "url": song["attributes"]["url"],
-                    "preview_url": song["attributes"].get("previews", [{}])[0].get("url") if song["attributes"].get("previews") else None,
-                    "artwork_url": AppleMusicService.standardize_artwork_url(artwork_url)
+                    "url": attributes["url"],
+                    "preview_url": attributes.get("previews", [{}])[0].get("url") if attributes.get("previews") else None,
+                    "artwork_url": AppleMusicService.standardize_artwork_url(artwork_url),
+                    # Additional song information
+                    "isrc": attributes.get("isrc"),
+                    "duration_in_millis": attributes.get("durationInMillis"),
+                    "plays": attributes.get("plays"),
+                    "genre_names": attributes.get("genreNames", []),
+                    "composer_name": attributes.get("composerName"),
+                    "release_date": attributes.get("releaseDate"),
+                    "has_lyrics": attributes.get("hasLyrics", False),
+                    "is_apple_digital_master": attributes.get("isAppleDigitalMaster", False),
+                    # Add album information
+                    "album": album_info if album_info else None
                 }
             
             # Cache results for 24 hours
