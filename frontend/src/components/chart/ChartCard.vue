@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import Button from "primevue/button";
+import Skeleton from "primevue/skeleton";
 import type { Song } from "@/utils/types";
 import {
   getPositionBadgeColor,
@@ -13,6 +14,7 @@ const props = defineProps<{
   flipped: boolean;
   playingTrackId: number | null;
   audioInfo: { progress: number };
+  loading?: boolean; // Add loading prop
 }>();
 
 const emit = defineEmits<{
@@ -71,7 +73,36 @@ function openChartLink(url: string, event?: Event) {
 </script>
 
 <template>
-  <div class="card-wrapper" @click="emit('flip', song.position)">
+  <!-- Skeleton Card when loading -->
+  <div v-if="loading" class="card-wrapper">
+    <div
+      class="card-face overflow-hidden card-front bg-white rounded-lg shadow-md flex flex-col h-full"
+    >
+      <!-- Skeleton Image -->
+      <Skeleton height="250px" class="w-full" />
+
+      <!-- Skeleton Content -->
+      <div class="p-4 flex flex-col flex-grow">
+        <div class="flex justify-between items-start mb-1">
+          <Skeleton width="70%" height="24px" class="mb-2" />
+          <Skeleton width="40px" height="20px" class="ml-2" />
+        </div>
+
+        <Skeleton width="50%" height="18px" class="mb-3" />
+
+        <div class="mt-auto pt-3 border-t border-gray-100">
+          <div class="flex justify-between">
+            <Skeleton width="30%" height="16px" />
+            <Skeleton width="30%" height="16px" />
+            <Skeleton width="30%" height="16px" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Regular Card when not loading -->
+  <div v-else class="card-wrapper" @click="emit('flip', song.position)">
     <transition name="p-flip" mode="out-in">
       <!-- Front card -->
       <div
@@ -83,7 +114,6 @@ function openChartLink(url: string, event?: Event) {
             :src="song.apple_music?.artwork_url || song.image"
             :alt="`${song.name} by ${song.artist}`"
             class="w-full aspect-square object-cover"
-            loading="lazy"
           />
           <div
             class="absolute top-0 left-0 m-2 font-bold rounded-full w-10 h-10 flex items-center justify-center"

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick, watch, onUnmounted, computed } from "vue";
 import { useChartStore } from "@/stores/chartStore";
-import LoadingSpinner from "@/components/ui/LoadingSpinner.vue";
 import ChartCard from "@/components/chart/ChartCard.vue";
 import InputText from "primevue/inputtext";
+import Skeleton from "primevue/skeleton";
 import { useAudio } from "@/composables/useAudio";
 import Fuse from "fuse.js";
 import type { Song } from "@/utils/types";
@@ -120,19 +120,20 @@ function handleVolumeChange(newVolume: number) {
 
 <template>
   <div class="chart-container h-full w-full">
-    <LoadingSpinner
-      v-if="chartStore.isLoading"
-      label="Loading chart data..."
-    ></LoadingSpinner>
-
-    <div
-      v-else
-      class="chart-view w-full"
-      :class="{ 'opacity-25': chartStore.isLoading }"
-    >
-      <!-- Chart Header -->
+    <div class="chart-view w-full">
+      <!-- Chart Header - Skeleton when loading -->
       <div
-        v-if="chartStore.chartData"
+        v-if="chartStore.isLoading"
+        class="chart-view__chart-header p-6 flex flex-col items-center gap-2 mb-6 bg-gradient-to-r from-indigo-700 to-purple-700 text-white rounded-lg"
+      >
+        <Skeleton width="300px" height="36px" />
+        <Skeleton width="80%" height="20px" class="mt-1" />
+        <Skeleton width="140px" height="24px" class="mt-2" />
+      </div>
+
+      <!-- Chart Header - Actual content when loaded -->
+      <div
+        v-else-if="chartStore.chartData"
         class="chart-view__chart-header p-6 flex flex-col items-center gap-2 mb-6 bg-gradient-to-r from-indigo-700 to-purple-700 text-white rounded-lg"
       >
         <h1 class="text-3xl font-bold">{{ chartStore.chartData.title }}</h1>
@@ -161,6 +162,7 @@ function handleVolumeChange(newVolume: number) {
               v-model="searchQuery"
               placeholder="Search songs or artists"
               class="w-full pl-10"
+              :disabled="chartStore.isLoading"
             />
           </span>
         </div>
@@ -168,7 +170,34 @@ function handleVolumeChange(newVolume: number) {
 
       <!-- Cards Grid View -->
       <div class="flex flex-wrap gap-4 justify-center">
+        <!-- Skeleton Cards when loading -->
         <div
+          v-if="chartStore.isLoading"
+          v-for="n in 12"
+          :key="`skeleton-${n}`"
+          class="chart-card-container w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1rem)] xl:w-[calc(25%-1rem)]"
+        >
+          <ChartCard
+            :song="{
+              position: n,
+              name: '',
+              artist: '',
+              image: '',
+              last_week_position: 0,
+              peak_position: 0,
+              weeks_on_chart: 0,
+              url: '',
+            }"
+            :flipped="false"
+            :playing-track-id="null"
+            :audio-info="{ progress: 0 }"
+            :loading="true"
+          />
+        </div>
+
+        <!-- Actual Cards when data is loaded -->
+        <div
+          v-else
           v-for="song in filteredSongs"
           :key="song.position"
           class="chart-card-container w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1rem)] xl:w-[calc(25%-1rem)]"
