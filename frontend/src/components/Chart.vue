@@ -4,7 +4,6 @@ import { useChartStore } from "@/stores/chartStore";
 import LoadingSpinner from "@/components/LoadingSpinner.vue";
 import InputText from "primevue/inputtext";
 import Button from "primevue/button";
-import type { Song } from "@/stores/chartStore";
 
 const chartStore = useChartStore();
 
@@ -174,12 +173,6 @@ watch(volume, (newVolume) => {
   }
 });
 
-// Calculate position change for display
-function getPositionChange(current: number, last: number | undefined): number {
-  if (last === undefined || last === 0) return 0;
-  return last - current;
-}
-
 // Format position change for display
 function formatPositionChange(
   current: number,
@@ -225,6 +218,23 @@ function getPositionBadgeColor(position: number) {
   if (position <= 50) return "bg-blue-600 text-white"; // Blue for top 50
   return "bg-black bg-opacity-70 text-white"; // Default black
 }
+
+// Add these methods to your script setup
+function openAppleMusic(url: string | undefined, event?: Event) {
+  if (event) {
+    event.stopPropagation();
+  }
+  if (url) {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
+
+function openChartLink(url: string, event?: Event) {
+  if (event) {
+    event.stopPropagation();
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 </script>
 
 <template>
@@ -256,18 +266,19 @@ function getPositionBadgeColor(position: number) {
         </p>
       </div>
 
-      <!-- Controls for search, sort, and view -->
       <div
         class="chart-controls mb-6 flex flex-col sm:flex-row gap-3 items-start sm:items-center"
       >
         <!-- Search Box -->
         <div class="search-box flex-grow">
-          <span class="p-input-icon-left w-full">
-            <i class="pi pi-search" />
+          <span class="p-input-icon-left w-full relative">
+            <i
+              class="pi pi-search absolute left-3 top-1/2 transform -translate-y-1/2 z-10 text-gray-500"
+            />
             <InputText
               v-model="searchQuery"
               placeholder="Search songs or artists"
-              class="w-full"
+              class="w-full pl-10"
             />
           </span>
         </div>
@@ -511,27 +522,27 @@ function getPositionBadgeColor(position: number) {
                     </div>
                   </div>
 
-                  <!-- External Links -->
+                  <!-- External Links section -->
                   <div class="external-links flex gap-2 mt-2">
-                    <a
+                    <Button
                       v-if="song.apple_music?.url"
-                      :href="song.apple_music.url"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="p-2 rounded-full bg-white/20 hover:bg-white/40 w-10 flex justify-center items-center"
-                      @click.stop
+                      @click="(e) => openAppleMusic(song.apple_music?.url, e)"
+                      class="p-button-rounded bg-white/30! hover:bg-white/60! cursor-pointer border-0! w-8! h-8!"
                     >
-                      <font-awesome-icon :icon="['fab', 'apple']" />
-                    </a>
-                    <a
-                      :href="song.url"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="p-2 rounded-full bg-white/20 hover:bg-white/40 w-10 flex justify-center items-center"
-                      @click.stop
+                      <font-awesome-icon
+                        :icon="['fab', 'apple']"
+                        class="text-white"
+                      />
+                    </Button>
+                    <Button
+                      @click="(e) => openChartLink(song.url, e)"
+                      class="p-button-rounded bg-white/30! hover:bg-white/60! cursor-pointer border-0! w-8! h-8!"
                     >
-                      <font-awesome-icon :icon="['fas', 'chart-line']" />
-                    </a>
+                      <font-awesome-icon
+                        :icon="['fas', 'chart-line']"
+                        class="text-white"
+                      />
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -542,7 +553,6 @@ function getPositionBadgeColor(position: number) {
     </div>
   </div>
 </template>
-
 <style lang="scss" scoped>
 /* Flip animation for PrimeVue transition */
 .p-flip-enter-active {
@@ -639,12 +649,14 @@ function getPositionBadgeColor(position: number) {
 }
 
 input[type="range"] {
+  appearance: none;
   -webkit-appearance: none;
   height: 4px;
   background: rgba(255, 255, 255, 0.3);
   border-radius: 2px;
 
   &::-webkit-slider-thumb {
+    appearance: none;
     -webkit-appearance: none;
     width: 12px;
     height: 12px;

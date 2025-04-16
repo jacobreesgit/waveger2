@@ -30,3 +30,13 @@
 .pause-icon {
   font-size: 1.5rem;
 }
+
+.search-box {
+  .p-input-icon-left > i {
+    z-index: 1;
+  }
+
+  .p-input-icon-left > .p-inputtext {
+    padding-left: 2.5rem;
+  }
+}
