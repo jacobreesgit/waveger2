@@ -137,7 +137,7 @@ class AppleMusicService:
                 'term': search_term,
                 'types': 'songs',
                 'limit': 1,
-                'include': 'albums'
+                'include': 'albums'  # Include album data in the response
             }
             
             response = requests.get(url, headers=headers, params=params, timeout=5)
@@ -151,39 +151,40 @@ class AppleMusicService:
                 attributes = song["attributes"]
                 artwork_url = attributes.get("artwork", {}).get("url", "")
                 
-                # Gather album information if available
-                album_info = {}
-                if "relationships" in song and "albums" in song["relationships"] and song["relationships"]["albums"]["data"]:
-                    album = song["relationships"]["albums"]["data"][0]["attributes"]
-                    album_info = {
-                        "album_name": album.get("name"),
-                        "album_id": song["relationships"]["albums"]["data"][0].get("id"),
-                        "album_url": album.get("url"),
-                        "release_date": album.get("releaseDate"),
-                        "record_label": album.get("recordLabel"),
-                        "copyright": album.get("copyright"),
-                        "genre_names": album.get("genreNames", []),
-                        "is_compilation": album.get("isCompilation", False),
-                        "track_count": album.get("trackCount")
-                    }
-                
+                # Create basic result with required fields
                 result = {
                     "id": song["id"],
                     "url": attributes["url"],
                     "preview_url": attributes.get("previews", [{}])[0].get("url") if attributes.get("previews") else None,
                     "artwork_url": AppleMusicService.standardize_artwork_url(artwork_url),
-                    # Additional song information
-                    "isrc": attributes.get("isrc"),
-                    "duration_in_millis": attributes.get("durationInMillis"),
-                    "plays": attributes.get("plays"),
-                    "genre_names": attributes.get("genreNames", []),
-                    "composer_name": attributes.get("composerName"),
-                    "release_date": attributes.get("releaseDate"),
-                    "has_lyrics": attributes.get("hasLyrics", False),
-                    "is_apple_digital_master": attributes.get("isAppleDigitalMaster", False),
-                    # Add album information
-                    "album": album_info if album_info else None
                 }
+                
+                # Add important song details
+                if attributes.get("durationInMillis"):
+                    result["duration_in_millis"] = attributes["durationInMillis"]
+                
+                if attributes.get("isrc"):
+                    result["isrc"] = attributes["isrc"]
+                
+                if attributes.get("releaseDate"):
+                    result["release_date"] = attributes["releaseDate"]
+                
+                # Add album information if available
+                if "relationships" in song and "albums" in song["relationships"] and song["relationships"]["albums"]["data"]:
+                    album = song["relationships"]["albums"]["data"][0]["attributes"]
+                    result["album"] = {
+                        "name": album.get("name"),
+                        "artist": album.get("artistName"),
+                        "url": album.get("url"),
+                        "record_label": album.get("recordLabel"),
+                        "release_date": album.get("releaseDate")
+                    }
+                    
+                    # Add album artwork if available
+                    if album.get("artwork", {}).get("url"):
+                        result["album"]["artwork_url"] = AppleMusicService.standardize_artwork_url(
+                            album["artwork"]["url"]
+                        )
             
             # Cache results for 24 hours
             cache.set(cache_key, result, timeout=24*60*60)
