@@ -137,7 +137,7 @@ class AppleMusicService:
                 'term': search_term,
                 'types': 'songs',
                 'limit': 1,
-                'include': 'albums'  # Include album data in the response
+                'include': 'albums,artists,composers'  # Enhanced to include more relationships
             }
             
             response = requests.get(url, headers=headers, params=params, timeout=5)
@@ -169,21 +169,62 @@ class AppleMusicService:
                 if attributes.get("releaseDate"):
                     result["release_date"] = attributes["releaseDate"]
                 
+                # Add GENRES (new)
+                if attributes.get("genreNames"):
+                    result["genres"] = attributes["genreNames"]
+                
+                # Add COMPOSERS (new)
+                if attributes.get("composerName"):
+                    result["composers"] = attributes["composerName"].split(", ")
+                
+                # Add LYRICISTS (new)
+                if attributes.get("artistName") and attributes.get("composerName") != attributes.get("artistName"):
+                    result["lyricists"] = attributes.get("artistName").split(", ")
+                
                 # Add album information if available
                 if "relationships" in song and "albums" in song["relationships"] and song["relationships"]["albums"]["data"]:
-                    album = song["relationships"]["albums"]["data"][0]["attributes"]
+                    album_data = song["relationships"]["albums"]["data"][0]
+                    album = album_data["attributes"]
+                    
+                    # Enhanced album information
                     result["album"] = {
+                        "id": album_data.get("id"),
                         "name": album.get("name"),
                         "artist": album.get("artistName"),
                         "url": album.get("url"),
                         "record_label": album.get("recordLabel"),
-                        "release_date": album.get("releaseDate")
+                        "release_date": album.get("releaseDate"),
+                        "track_count": album.get("trackCount"),
+                        "copyright": album.get("copyright"),
+                        "editorial_notes": album.get("editorialNotes", {}).get("standard")
                     }
+                    
+                    # Add album genres (new)
+                    if album.get("genreNames"):
+                        result["album"]["genres"] = album["genreNames"]
                     
                     # Add album artwork if available
                     if album.get("artwork", {}).get("url"):
                         result["album"]["artwork_url"] = AppleMusicService.standardize_artwork_url(
                             album["artwork"]["url"]
+                        )
+                
+                # Add artist information if available (new)
+                if "relationships" in song and "artists" in song["relationships"] and song["relationships"]["artists"]["data"]:
+                    artist_data = song["relationships"]["artists"]["data"][0]
+                    artist_attributes = artist_data["attributes"]
+                    
+                    result["artist_info"] = {
+                        "id": artist_data.get("id"),
+                        "name": artist_attributes.get("name"),
+                        "url": artist_attributes.get("url"),
+                        "genres": artist_attributes.get("genreNames")
+                    }
+                    
+                    # Add artist artwork if available
+                    if artist_attributes.get("artwork", {}).get("url"):
+                        result["artist_info"]["artwork_url"] = AppleMusicService.standardize_artwork_url(
+                            artist_attributes["artwork"]["url"]
                         )
             
             # Cache results for 24 hours
@@ -194,7 +235,7 @@ class AppleMusicService:
             logger.error(f"Error searching Apple Music: {e}")
             # Cache failures briefly to prevent immediate retries
             cache.set(cache_key, None, timeout=300)
-            return None    
+            return None
     
     @staticmethod
     def enrich_chart_data(data):
@@ -253,7 +294,6 @@ class AppleMusicService:
             logger.error(f"Error enriching chart data with Apple Music: {e}")
             
         return data
-
 # ================= Billboard API Route =================
 
 @billboard_bp.route('/billboard_api.php')
