@@ -2,9 +2,7 @@
 import { onMounted } from "vue";
 import { useChartStore } from "@/stores/chartStore";
 import { RouterView } from "vue-router";
-
-import Nav from "@/components/Nav.vue";
-
+import Nav from "@/components/nav/Nav.vue";
 const chartStore = useChartStore();
 
 onMounted(() => {
@@ -22,5 +20,3 @@ onMounted(() => {
     </main>
   </div>
 </template>
-
-<style lang="scss" scoped></style>

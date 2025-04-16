@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import Chart from "@/components/Chart.vue";
-import ChartSelector from "@/components/ChartSelector.vue";
-import ChartDatePicker from "@/components/ChartDatePicker.vue";
+import Chart from "@/components/chart/Chart.vue";
+import ChartSelector from "@/components/chart/ChartSelector.vue";
+import ChartDatePicker from "@/components/chart/ChartDatePicker.vue";
 </script>
 
 <template>
@@ -13,8 +13,6 @@ import ChartDatePicker from "@/components/ChartDatePicker.vue";
       <ChartDatePicker />
     </div>
 
-    <Chart></Chart>
+    <Chart />
   </div>
 </template>
-
-<style lang="scss" scoped></style>

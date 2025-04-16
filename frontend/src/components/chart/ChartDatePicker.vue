@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
 import { useChartStore } from "@/stores/chartStore";
+import { stringToDate, formatDateString } from "@/utils/dateUtils";
 import DatePicker from "primevue/datepicker";
 import Button from "primevue/button";
 
@@ -17,20 +18,6 @@ const isNotToday = computed(() => {
   const todayStr = formatDateString(new Date());
   return store.selectedDate !== todayStr;
 });
-
-// Convert string date to Date object
-function stringToDate(dateStr: string): Date {
-  if (!dateStr) return new Date();
-  return new Date(dateStr);
-}
-
-// Format Date to YYYY-MM-DD string
-function formatDateString(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
 
 // When date changes in the picker
 function onDateChange(newDate: Date | null) {

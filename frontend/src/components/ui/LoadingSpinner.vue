@@ -30,7 +30,7 @@ const spinnerSize = () => {
       return "60px";
     case "medium":
     default:
-      return "60px";
+      return "40px";
   }
 };
 

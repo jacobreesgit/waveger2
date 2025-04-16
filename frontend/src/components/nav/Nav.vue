@@ -23,7 +23,7 @@ const menuItems = computed<MenuItem[]>(() => {
 </script>
 
 <template>
-  <div
+  <header
     class="nav flex items-center p-2 px-4 sm:pl-4 bg-gray-100 relative gap-7"
   >
     <div
@@ -40,7 +40,7 @@ const menuItems = computed<MenuItem[]>(() => {
       :model="menuItems"
       class="nav__nav-menu sm:flex-grow bg-transparent border-none sm:order-1 order-0"
     />
-  </div>
+  </header>
 </template>
 
 <style lang="scss" scoped>

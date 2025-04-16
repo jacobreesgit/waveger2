@@ -1,30 +1,11 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { useChartStore } from "@/stores/chartStore";
+import { CHART_OPTIONS } from "@/utils/chartConstants";
 import Select from "primevue/select";
 
 const store = useChartStore();
 const selectedChartId = ref(store.chartId);
-
-const chartOptions = [
-  { id: "hot-100", title: "Billboard Hot 100™" },
-  { id: "billboard-200", title: "Billboard 200™" },
-  { id: "artist-100", title: "Billboard Artist 100" },
-  { id: "emerging-artists", title: "Emerging Artists" },
-  { id: "streaming-songs", title: "Streaming Songs" },
-  { id: "radio-songs", title: "Radio Songs" },
-  { id: "digital-song-sales", title: "Digital Song Sales" },
-  { id: "summer-songs", title: "Songs of the Summer" },
-  { id: "top-album-sales", title: "Top Album Sales" },
-  { id: "top-streaming-albums", title: "Top Streaming Albums" },
-  { id: "independent-albums", title: "Independent Albums" },
-  { id: "vinyl-albums", title: "Vinyl Albums" },
-  { id: "indie-store-album-sales", title: "Indie Store Album Sales" },
-  {
-    id: "billboard-u-s-afrobeats-songs",
-    title: "Billboard U.S. Afrobeats Songs",
-  },
-];
 
 // Watch for changes to selectedChartId and update the store
 watch(selectedChartId, (newChartId) => {
@@ -50,7 +31,7 @@ watch(
     <Select
       id="chart-select"
       v-model="selectedChartId"
-      :options="chartOptions"
+      :options="CHART_OPTIONS"
       optionLabel="title"
       optionValue="id"
       placeholder="Select a chart"
