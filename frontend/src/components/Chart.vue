@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick, watch, onUnmounted } from "vue";
-import LoadingSpinner from "@/components/LoadingSpinner.vue";
 import { useChartStore } from "@/stores/chartStore";
+import LoadingSpinner from "@/components/LoadingSpinner.vue";
+import InputText from "primevue/inputtext";
+import Button from "primevue/button";
+import type { Song } from "@/stores/chartStore";
 
 const chartStore = useChartStore();
 
@@ -10,35 +13,49 @@ const currentAudio = ref<HTMLAudioElement | null>(null);
 const playingTrackId = ref<number | null>(null);
 const audioProgress = ref<Record<number, number>>({});
 const flippedCards = ref<Record<number, boolean>>({});
-
-// Favorite tracks (no real functionality)
+const volume = ref<number>(0.8); // Default volume
 const favoriteTracks = ref<Record<number, boolean>>({});
 
 // Web Audio API components
 const audioContext = ref<AudioContext | null>(null);
 const analyser = ref<AnalyserNode | null>(null);
 
-// Card height management
+// Card display management
 const maxCardHeight = ref(0);
+
+// Filter and search
+const searchQuery = ref("");
 
 // Watch for chart data changes and update card heights
 watch(
   () => chartStore.chartData,
   async () => {
     if (chartStore.chartData) {
-      // Wait for the DOM to update before measuring
       await nextTick();
-      // Set timeout for any image loading
+      // Allow time for images to load
       setTimeout(updateCardHeights, 100);
     }
   },
   { immediate: true }
 );
 
-// Update card heights when window is resized
+// Setup event listeners and audio context
 onMounted(() => {
   window.addEventListener("resize", updateCardHeights);
-  // Initialize Web Audio API
+  setupAudioContext();
+});
+
+// Clean up resources
+onUnmounted(() => {
+  window.removeEventListener("resize", updateCardHeights);
+  stopCurrentAudio();
+  if (audioContext.value && audioContext.value.state !== "closed") {
+    audioContext.value.close();
+  }
+});
+
+// Initialize Web Audio API
+function setupAudioContext() {
   try {
     audioContext.value = new (window.AudioContext ||
       (window as any).webkitAudioContext)();
@@ -47,24 +64,12 @@ onMounted(() => {
   } catch (e) {
     console.warn("Web Audio API not supported:", e);
   }
-});
+}
 
-onUnmounted(() => {
-  window.removeEventListener("resize", updateCardHeights);
-  if (currentAudio.value) {
-    currentAudio.value.pause();
-    currentAudio.value = null;
-  }
-  if (audioContext.value && audioContext.value.state !== "closed") {
-    audioContext.value.close();
-  }
-});
-
-// Simpler function to update card heights
+// Update card heights for consistent layout
 function updateCardHeights() {
-  maxCardHeight.value = 0; // Reset measurement
+  maxCardHeight.value = 0;
 
-  // Calculate the height after next render cycle
   nextTick(() => {
     const cardElements = document.querySelectorAll(".card-front");
     cardElements.forEach((card) => {
@@ -76,7 +81,7 @@ function updateCardHeights() {
   });
 }
 
-// Toggle card flip state
+// Toggle card flip state - click or interaction
 function toggleFlip(position: number) {
   flippedCards.value[position] = !flippedCards.value[position];
 }
@@ -89,6 +94,15 @@ function toggleFavorite(position: number, event?: Event) {
   favoriteTracks.value[position] = !favoriteTracks.value[position];
 }
 
+// Stop any currently playing audio
+function stopCurrentAudio() {
+  if (currentAudio.value) {
+    currentAudio.value.pause();
+    currentAudio.value = null;
+    playingTrackId.value = null;
+  }
+}
+
 // Play preview if available
 async function playPreview(
   previewUrl: string | null,
@@ -99,12 +113,12 @@ async function playPreview(
     event.stopPropagation();
   }
 
-  // Stop any currently playing audio
+  // Stop current audio if playing
   if (currentAudio.value) {
     currentAudio.value.pause();
     currentAudio.value = null;
 
-    // If clicking on the same track, just stop it
+    // If clicking on same track, just stop it
     if (playingTrackId.value === position) {
       playingTrackId.value = null;
       return;
@@ -113,20 +127,21 @@ async function playPreview(
 
   if (previewUrl && audioContext.value) {
     try {
-      // Resume audio context if suspended (needed for browser autoplay policies)
+      // Resume audio context if suspended
       if (audioContext.value.state === "suspended") {
         await audioContext.value.resume();
       }
 
-      // Create a new audio element
+      // Create and configure audio element
       const audio = new Audio(previewUrl);
       audio.crossOrigin = "anonymous";
+      audio.volume = volume.value;
 
-      // Create a media element source and connect to analyzer
+      // Connect to audio analyzer
       const source = audioContext.value.createMediaElementSource(audio);
       source.connect(analyser.value as AnalyserNode);
 
-      // Set up progress tracking
+      // Track progress
       audio.ontimeupdate = () => {
         if (audio.duration) {
           audioProgress.value[position] =
@@ -135,7 +150,7 @@ async function playPreview(
       };
 
       // Start playback
-      audio.play();
+      await audio.play();
       currentAudio.value = audio;
       playingTrackId.value = position;
       audioProgress.value[position] = 0;
@@ -152,6 +167,20 @@ async function playPreview(
   }
 }
 
+// Update volume for current audio
+watch(volume, (newVolume) => {
+  if (currentAudio.value) {
+    currentAudio.value.volume = newVolume;
+  }
+});
+
+// Calculate position change for display
+function getPositionChange(current: number, last: number | undefined): number {
+  if (last === undefined || last === 0) return 0;
+  return last - current;
+}
+
+// Format position change for display
 function formatPositionChange(
   current: number,
   last: number | undefined
@@ -163,6 +192,7 @@ function formatPositionChange(
   return diff > 0 ? `↑${diff}` : `↓${Math.abs(diff)}`;
 }
 
+// Get CSS class for position change
 function getPositionChangeClass(
   current: number,
   last: number | undefined
@@ -174,7 +204,7 @@ function getPositionChangeClass(
   return diff > 0 ? "text-green-500" : "text-red-500";
 }
 
-// Compute if audio is playing and get normalized progress (0-1)
+// Get audio playback information
 function getAudioInfo(position: number) {
   const isPlaying = playingTrackId.value === position;
   const progress = audioProgress.value[position] ?? 0;
@@ -198,7 +228,7 @@ function getPositionBadgeColor(position: number) {
 </script>
 
 <template>
-  <div class="chart h-full">
+  <div class="chart-container h-full w-full">
     <LoadingSpinner
       v-if="chartStore.isLoading"
       label="Loading chart data..."
@@ -206,9 +236,10 @@ function getPositionBadgeColor(position: number) {
 
     <div
       v-if="chartStore.chartData"
-      class="chart-view"
+      class="chart-view w-full"
       :class="{ 'opacity-25': chartStore.isLoading }"
     >
+      <!-- Chart Header -->
       <div
         class="chart-view__chart-header p-6 flex flex-col items-center gap-2 mb-6 bg-gradient-to-r from-indigo-700 to-purple-700 text-white rounded-lg"
       >
@@ -225,13 +256,30 @@ function getPositionBadgeColor(position: number) {
         </p>
       </div>
 
+      <!-- Controls for search, sort, and view -->
+      <div
+        class="chart-controls mb-6 flex flex-col sm:flex-row gap-3 items-start sm:items-center"
+      >
+        <!-- Search Box -->
+        <div class="search-box flex-grow">
+          <span class="p-input-icon-left w-full">
+            <i class="pi pi-search" />
+            <InputText
+              v-model="searchQuery"
+              placeholder="Search songs or artists"
+              class="w-full"
+            />
+          </span>
+        </div>
+      </div>
+
+      <!-- Cards Grid View -->
       <div class="flex flex-wrap gap-4 justify-center">
         <div
           v-for="song in chartStore.chartData.songs"
           :key="song.position"
           class="chart-card-container w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1rem)] xl:w-[calc(25%-1rem)]"
-          @mouseenter="toggleFlip(song.position)"
-          @mouseleave="toggleFlip(song.position)"
+          @click="toggleFlip(song.position)"
         >
           <div
             class="card-wrapper"
@@ -241,13 +289,14 @@ function getPositionBadgeColor(position: number) {
               <!-- Front card -->
               <div
                 v-if="!flippedCards[song.position]"
-                class="card-face overflow-hidden card-front bg-white rounded-lg shadow-md flex flex-col"
+                class="card-face overflow-hidden card-front bg-white rounded-lg shadow-md flex flex-col h-full"
               >
                 <div class="relative">
                   <img
                     :src="song.apple_music?.artwork_url || song.image"
                     :alt="`${song.name} by ${song.artist}`"
                     class="w-full aspect-square object-cover"
+                    loading="lazy"
                     @load="updateCardHeights"
                   />
                   <div
@@ -257,12 +306,12 @@ function getPositionBadgeColor(position: number) {
                     {{ song.position }}
                   </div>
 
-                  <div
-                    class="absolute top-0 right-0 m-2"
+                  <Button
                     @click="toggleFavorite(song.position, $event)"
+                    class="p-button-rounded absolute! top-0! right-0! m-2 bg-white/80! hover:bg-white! cursor-pointer border-0! w-8! h-8!"
                   >
                     <span
-                      class="favourite-btn cursor-pointer text-xl"
+                      class="text-xl"
                       :class="{
                         'pi pi-heart-fill text-red-500':
                           favoriteTracks[song.position],
@@ -270,12 +319,15 @@ function getPositionBadgeColor(position: number) {
                           !favoriteTracks[song.position],
                       }"
                     ></span>
-                  </div>
+                  </Button>
                 </div>
 
                 <div class="p-4 flex flex-col flex-grow">
                   <div class="flex justify-between items-start mb-1">
-                    <h3 class="font-bold text-lg" :title="song.name">
+                    <h3
+                      class="font-bold text-lg line-clamp-2"
+                      :title="song.name"
+                    >
                       {{ song.name }}
                     </h3>
                     <div
@@ -296,7 +348,10 @@ function getPositionBadgeColor(position: number) {
                     </div>
                   </div>
 
-                  <p class="text-gray-600 mb-2" :title="song.artist">
+                  <p
+                    class="text-gray-600 mb-2 line-clamp-1"
+                    :title="song.artist"
+                  >
                     {{ song.artist }}
                   </p>
 
@@ -312,7 +367,7 @@ function getPositionBadgeColor(position: number) {
                       <span class="font-medium">{{ song.weeks_on_chart }}</span>
                     </div>
                     <div v-if="song.last_week_position">
-                      Last Week:
+                      Last:
                       <span class="font-medium">{{
                         song.last_week_position
                       }}</span>
@@ -324,7 +379,7 @@ function getPositionBadgeColor(position: number) {
               <!-- Back card -->
               <div
                 v-else
-                class="card-face card-back rounded-lg shadow-lg flex flex-col"
+                class="card-face card-back rounded-lg shadow-lg flex flex-col h-full"
                 :style="{
                   backgroundImage: `url(${
                     song.apple_music?.artwork_url || song.image
@@ -345,24 +400,24 @@ function getPositionBadgeColor(position: number) {
                   {{ song.position }}
                 </div>
 
-                <!-- Back Favorite Button -->
-                <div
-                  class="absolute top-0 right-0 m-2 z-10"
+                <!-- Back Card Controls -->
+                <Button
                   @click="toggleFavorite(song.position, $event)"
+                  class="p-button-rounded absolute! top-0! right-0! m-2 bg-white/30! hover:bg-white/60! cursor-pointer border-0! w-8! h-8!"
                 >
                   <span
-                    class="favourite-btn cursor-pointer text-2xl"
+                    class="text-xl"
                     :class="{
                       'pi pi-heart-fill text-red-500':
                         favoriteTracks[song.position],
                       'pi pi-heart text-white': !favoriteTracks[song.position],
                     }"
                   ></span>
-                </div>
+                </Button>
 
                 <!-- Central content -->
                 <div
-                  class="relative z-10 p-6 flex flex-col items-center justify-center h-full text-white gap-6"
+                  class="relative z-10 p-6 flex flex-col items-center justify-center h-full text-white gap-4"
                 >
                   <!-- Song Title -->
                   <h3 class="font-bold text-xl text-center">{{ song.name }}</h3>
@@ -370,47 +425,113 @@ function getPositionBadgeColor(position: number) {
                   <!-- Artist -->
                   <p class="text-gray-300 text-center">{{ song.artist }}</p>
 
+                  <!-- Stats Display -->
+                  <div class="stats-display grid grid-cols-3 gap-3 w-full mb-2">
+                    <div class="stat-item flex flex-col items-center">
+                      <span class="text-gray-300 text-xs">Position</span>
+                      <span class="font-bold text-lg text-white">{{
+                        song.position
+                      }}</span>
+                    </div>
+                    <div class="stat-item flex flex-col items-center">
+                      <span class="text-gray-300 text-xs">Peak</span>
+                      <span class="font-bold text-lg text-white">{{
+                        song.peak_position
+                      }}</span>
+                    </div>
+                    <div class="stat-item flex flex-col items-center">
+                      <span class="text-gray-300 text-xs">Weeks</span>
+                      <span class="font-bold text-lg text-white">{{
+                        song.weeks_on_chart
+                      }}</span>
+                    </div>
+                  </div>
+
                   <!-- Play Button -->
                   <div
                     v-if="song.apple_music?.preview_url"
-                    class="play-button-container relative cursor-pointer"
-                    @click="
-                      playPreview(
-                        song.apple_music?.preview_url,
-                        song.position,
-                        $event
-                      )
-                    "
+                    class="play-container flex flex-col items-center gap-2 w-full"
                   >
                     <!-- Circular progress -->
                     <div
-                      class="circular-progress"
-                      :style="{
-                        background: `conic-gradient(
-                          rgba(255, 255, 255, 0.8) ${
-                            getAudioInfo(song.position).progress * 360
-                          }deg,
-                          rgba(255, 255, 255, 0.2) ${
-                            getAudioInfo(song.position).progress * 360
-                          }deg
-                        )`,
-                      }"
+                      class="play-button-container relative cursor-pointer"
+                      @click.stop="
+                        playPreview(
+                          song.apple_music?.preview_url,
+                          song.position,
+                          $event
+                        )
+                      "
                     >
                       <div
-                        class="inner-circle flex items-center justify-center"
+                        class="circular-progress"
+                        :style="{
+                          background: `conic-gradient(
+                            rgba(255, 255, 255, 0.8) ${
+                              getAudioInfo(song.position).progress * 360
+                            }deg,
+                            rgba(255, 255, 255, 0.2) ${
+                              getAudioInfo(song.position).progress * 360
+                            }deg
+                          )`,
+                        }"
                       >
-                        <font-awesome-icon
-                          v-if="playingTrackId === song.position"
-                          :icon="['fas', 'pause']"
-                          class="pause-icon"
-                        />
-                        <font-awesome-icon
-                          v-else
-                          :icon="['fas', 'play']"
-                          class="play-icon"
-                        />
+                        <div
+                          class="inner-circle flex items-center justify-center"
+                        >
+                          <font-awesome-icon
+                            v-if="playingTrackId === song.position"
+                            :icon="['fas', 'pause']"
+                            class="text-2xl"
+                          />
+                          <font-awesome-icon
+                            v-else
+                            :icon="['fas', 'play']"
+                            class="text-2xl"
+                          />
+                        </div>
                       </div>
                     </div>
+
+                    <!-- Volume Control -->
+                    <div
+                      class="volume-control w-full max-w-[160px] flex items-center gap-2"
+                    >
+                      <span class="pi pi-volume-down text-sm"></span>
+                      <input
+                        type="range"
+                        v-model="volume"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        class="flex-grow"
+                        @click.stop
+                      />
+                      <span class="pi pi-volume-up text-sm"></span>
+                    </div>
+                  </div>
+
+                  <!-- External Links -->
+                  <div class="external-links flex gap-2 mt-2">
+                    <a
+                      v-if="song.apple_music?.url"
+                      :href="song.apple_music.url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="p-2 rounded-full bg-white/20 hover:bg-white/40 w-10 flex justify-center items-center"
+                      @click.stop
+                    >
+                      <font-awesome-icon :icon="['fab', 'apple']" />
+                    </a>
+                    <a
+                      :href="song.url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="p-2 rounded-full bg-white/20 hover:bg-white/40 w-10 flex justify-center items-center"
+                      @click.stop
+                    >
+                      <font-awesome-icon :icon="['fas', 'chart-line']" />
+                    </a>
                   </div>
                 </div>
               </div>
@@ -423,12 +544,12 @@ function getPositionBadgeColor(position: number) {
 </template>
 
 <style lang="scss" scoped>
-/* Add flip animation for PrimeVue transition */
+/* Flip animation for PrimeVue transition */
 .p-flip-enter-active {
-  animation: p-flip-in 0.6s;
+  animation: p-flip-in 0.5s;
 }
 .p-flip-leave-active {
-  animation: p-flip-out 0.6s;
+  animation: p-flip-out 0.5s;
 }
 @keyframes p-flip-in {
   0% {
@@ -461,6 +582,11 @@ function getPositionBadgeColor(position: number) {
   width: 100%;
   min-height: var(--min-card-height, auto);
   display: flex;
+  transition: transform 0.2s ease-in-out;
+
+  &:hover {
+    transform: translateY(-4px);
+  }
 }
 
 .card-face {
@@ -469,11 +595,17 @@ function getPositionBadgeColor(position: number) {
   display: flex;
   flex-direction: column;
   min-height: var(--min-card-height, auto);
+  transition: box-shadow 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+      0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  }
 }
 
 .play-button-container {
-  width: 80px;
-  height: 80px;
+  width: 64px;
+  height: 64px;
 
   .circular-progress {
     width: 100%;
@@ -495,29 +627,39 @@ function getPositionBadgeColor(position: number) {
   }
 
   .inner-circle {
-    width: 90%;
-    height: 90%;
+    width: 85%;
+    height: 85%;
     background: rgba(0, 0, 0, 0.5);
     border-radius: 50%;
     color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 
-.favourite-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 32px;
-  width: 32px;
-  border-radius: 50%;
-  transition: all 0.2s ease;
+input[type="range"] {
+  -webkit-appearance: none;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
 
-  &:hover {
-    transform: scale(1.1);
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    background: white;
+    border-radius: 50%;
+    cursor: pointer;
   }
 
-  &:active {
-    transform: scale(0.95);
+  &::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: white;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
   }
 }
 </style>
