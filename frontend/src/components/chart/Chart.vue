@@ -96,16 +96,26 @@ function sequentiallyRevealCards() {
     if (currentIndex < positions.length) {
       revealedCards.value.push(positions[currentIndex]);
       currentIndex++;
-      setTimeout(revealNextCard, 500); // 500ms delay between each card
+      setTimeout(revealNextCard, 250); // Delay between each card
     } else {
       isSequencing.value = false;
+      // Update card heights once all cards are revealed
+      updateAfterCardsRevealed();
     }
   };
 
   revealNextCard();
 }
 
-// Watch for chart data changes and update card heights
+// Update card heights once after cards are revealed
+function updateAfterCardsRevealed() {
+  // Schedule height update after cards are revealed
+  nextTick(() => {
+    updateCardHeights();
+  });
+}
+
+// Watch for chart data changes
 watch(
   () => chartStore.chartData,
   async (newData, oldData) => {
@@ -118,11 +128,6 @@ watch(
       ) {
         revealedCards.value = [];
       }
-
-      await nextTick();
-
-      // Allow time for images to load
-      setTimeout(updateCardHeights, 100);
 
       // Start sequential loading if we have songs and no cards are revealed yet
       if (
@@ -137,23 +142,16 @@ watch(
   { immediate: true }
 );
 
-// Watch for enriched data and loading states
+// Watch for loading states to initiate sequential loading at the right time
 watch(
-  [
-    () => chartStore.hasEnrichedData,
-    () => chartStore.isLoadingBasic,
-    () => chartStore.isLoadingEnriched,
-  ],
-  ([hasEnriched, isLoadingBasic, isLoadingEnriched]) => {
-    // Update card heights after enrichment
-    if (hasEnriched) {
-      nextTick(() => {
-        setTimeout(updateCardHeights, 100);
-      });
-    }
-
-    // If we've just finished loading (either basic or enriched) and no cards are revealed yet
+  [() => chartStore.isLoadingBasic, () => chartStore.isLoadingEnriched],
+  (
+    [isLoadingBasic, isLoadingEnriched],
+    [wasLoadingBasic, wasLoadingEnriched]
+  ) => {
+    // If we just finished loading from a loading state and have chart data
     if (
+      (wasLoadingBasic || wasLoadingEnriched) &&
       !isLoadingBasic &&
       !isLoadingEnriched &&
       chartStore.chartData?.songs &&
@@ -161,8 +159,7 @@ watch(
     ) {
       sequentiallyRevealCards();
     }
-  },
-  { deep: true }
+  }
 );
 
 // Reset state when chart or date changes
