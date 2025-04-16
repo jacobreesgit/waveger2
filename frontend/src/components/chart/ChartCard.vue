@@ -298,6 +298,9 @@ function openChartLink(url: string, event?: Event) {
   min-height: var(--min-card-height, auto);
   display: flex;
   transition: transform 0.2s ease-in-out;
+  perspective: 1500px;
+  transform-style: preserve-3d;
+  will-change: transform;
 
   &:hover {
     transform: translateY(-4px);
@@ -311,6 +314,11 @@ function openChartLink(url: string, event?: Event) {
   flex-direction: column;
   min-height: var(--min-card-height, auto);
   transition: box-shadow 0.2s ease;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+  will-change: transform, opacity;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
 
   &:hover {
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),

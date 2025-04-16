@@ -1,90 +1,79 @@
 import { ref, watch, onUnmounted } from "vue";
+import { Howl } from "howler";
 
 export function useAudio() {
   // Audio state
-  const currentAudio = ref<HTMLAudioElement | null>(null);
+  const sounds = ref<Record<number, Howl>>({});
   const playingTrackId = ref<number | null>(null);
   const audioProgress = ref<Record<number, number>>({});
   const volume = ref<number>(0.8); // Default volume
 
-  // Web Audio API components
-  const audioContext = ref<AudioContext | null>(null);
-  const analyser = ref<AnalyserNode | null>(null);
-
-  // Setup Web Audio API
-  function setupAudioContext() {
-    try {
-      audioContext.value = new (window.AudioContext ||
-        (window as any).webkitAudioContext)();
-      analyser.value = audioContext.value.createAnalyser();
-      analyser.value.connect(audioContext.value.destination);
-    } catch (e) {
-      console.warn("Web Audio API not supported:", e);
-    }
-  }
-
   // Stop any currently playing audio
   function stopCurrentAudio() {
-    if (currentAudio.value) {
-      currentAudio.value.pause();
-      currentAudio.value = null;
+    if (playingTrackId.value !== null && sounds.value[playingTrackId.value]) {
+      sounds.value[playingTrackId.value].stop();
       playingTrackId.value = null;
     }
   }
 
   // Play preview if available
-  async function playPreview(
-    previewUrl: string | null | undefined,
-    trackId: number
-  ) {
+  function playPreview(previewUrl: string | null | undefined, trackId: number) {
     // Stop current audio if playing
-    if (currentAudio.value) {
-      currentAudio.value.pause();
-      currentAudio.value = null;
+    if (playingTrackId.value !== null) {
+      stopCurrentAudio();
 
       // If clicking on same track, just stop it
       if (playingTrackId.value === trackId) {
-        playingTrackId.value = null;
         return;
       }
     }
 
-    if (previewUrl && audioContext.value) {
+    if (previewUrl) {
       try {
-        // Resume audio context if suspended
-        if (audioContext.value.state === "suspended") {
-          await audioContext.value.resume();
+        // Create a new Howl instance if it doesn't exist
+        if (!sounds.value[trackId]) {
+          sounds.value[trackId] = new Howl({
+            src: [previewUrl],
+            html5: true, // Use HTML5 Audio to stream the audio
+            volume: volume.value,
+            onplay: () => {
+              playingTrackId.value = trackId;
+              audioProgress.value[trackId] = 0;
+              // Update progress while playing
+              const progressInterval = setInterval(() => {
+                if (sounds.value[trackId]) {
+                  const progress =
+                    sounds.value[trackId].seek() /
+                    sounds.value[trackId].duration();
+                  audioProgress.value[trackId] = progress * 100;
+                }
+              }, 100);
+
+              // Store the interval ID on the Howl instance for cleanup
+              (sounds.value[trackId] as any)._progressInterval =
+                progressInterval;
+            },
+            onend: () => {
+              if ((sounds.value[trackId] as any)._progressInterval) {
+                clearInterval((sounds.value[trackId] as any)._progressInterval);
+              }
+              audioProgress.value[trackId] = 0;
+              playingTrackId.value = null;
+            },
+            onstop: () => {
+              if ((sounds.value[trackId] as any)._progressInterval) {
+                clearInterval((sounds.value[trackId] as any)._progressInterval);
+              }
+              audioProgress.value[trackId] = 0;
+            },
+          });
+        } else {
+          // Update volume in case it changed
+          sounds.value[trackId].volume(volume.value);
         }
 
-        // Create and configure audio element
-        const audio = new Audio(previewUrl);
-        audio.crossOrigin = "anonymous";
-        audio.volume = volume.value;
-
-        // Connect to audio analyzer
-        const source = audioContext.value.createMediaElementSource(audio);
-        source.connect(analyser.value as AnalyserNode);
-
-        // Track progress
-        audio.ontimeupdate = () => {
-          if (audio.duration) {
-            audioProgress.value[trackId] =
-              (audio.currentTime / audio.duration) * 100;
-          }
-        };
-
-        // Start playback
-        await audio.play();
-        currentAudio.value = audio;
-        playingTrackId.value = trackId;
-        audioProgress.value[trackId] = 0;
-
-        // Reset when playback ends
-        audio.onended = () => {
-          playingTrackId.value = null;
-          currentAudio.value = null;
-          audioProgress.value[trackId] = 0;
-        };
+        // Play the sound
+        sounds.value[trackId].play();
       } catch (error) {
         console.error("Error playing audio:", error);
       }
@@ -93,8 +82,8 @@ export function useAudio() {
 
   // Update volume for current audio
   watch(volume, (newVolume) => {
-    if (currentAudio.value) {
-      currentAudio.value.volume = newVolume;
+    if (playingTrackId.value !== null && sounds.value[playingTrackId.value]) {
+      sounds.value[playingTrackId.value].volume(newVolume);
     }
   });
 
@@ -111,20 +100,28 @@ export function useAudio() {
 
   // Clean up resources
   onUnmounted(() => {
-    stopCurrentAudio();
-    if (audioContext.value && audioContext.value.state !== "closed") {
-      audioContext.value.close();
-    }
+    // Stop and unload all sounds
+    Object.values(sounds.value).forEach((sound) => {
+      sound.stop();
+      sound.unload();
+      // Clear any progress intervals
+      if ((sound as any)._progressInterval) {
+        clearInterval((sound as any)._progressInterval);
+      }
+    });
+
+    sounds.value = {};
+    playingTrackId.value = null;
   });
 
   return {
-    currentAudio,
     playingTrackId,
     audioProgress,
     volume,
-    setupAudioContext,
     stopCurrentAudio,
     playPreview,
     getAudioInfo,
+    // Keep setupAudioContext in the return object for API compatibility
+    setupAudioContext: () => {}, // No-op as Howler.js handles this internally
   };
 }

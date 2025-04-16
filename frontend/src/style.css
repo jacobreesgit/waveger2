@@ -43,28 +43,39 @@
 
 /* Flip animation for PrimeVue transition */
 .p-flip-enter-active {
-  animation: p-flip-in 0.5s;
+  animation: p-flip-in 0.3725s ease-out;
+  animation-fill-mode: both;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
 }
+
 .p-flip-leave-active {
-  animation: p-flip-out 0.5s;
+  animation: p-flip-out 0.3725s ease-in;
+  animation-fill-mode: both;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
 }
+
 @keyframes p-flip-in {
   0% {
-    transform: rotateY(90deg);
+    transform: rotateY(90deg) translateZ(0);
     opacity: 0;
   }
   100% {
-    transform: rotateY(0deg);
+    transform: rotateY(0deg) translateZ(0);
     opacity: 1;
   }
 }
+
 @keyframes p-flip-out {
   0% {
-    transform: rotateY(0deg);
+    transform: rotateY(0deg) translateZ(0);
     opacity: 1;
   }
   100% {
-    transform: rotateY(90deg);
+    transform: rotateY(90deg) translateZ(0);
     opacity: 0;
   }
 }
