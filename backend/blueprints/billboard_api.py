@@ -136,8 +136,7 @@ class AppleMusicService:
             params = {
                 'term': search_term,
                 'types': 'songs',
-                'limit': 1,
-                'include': 'albums,artists,composers'  # Enhanced to include more relationships
+                'limit': 1
             }
             
             response = requests.get(url, headers=headers, params=params, timeout=5)
@@ -148,84 +147,14 @@ class AppleMusicService:
             result = None
             if data.get("results", {}).get("songs", {}).get("data"):
                 song = data["results"]["songs"]["data"][0]
-                attributes = song["attributes"]
-                artwork_url = attributes.get("artwork", {}).get("url", "")
+                artwork_url = song["attributes"].get("artwork", {}).get("url", "")
                 
-                # Create basic result with required fields
                 result = {
                     "id": song["id"],
-                    "url": attributes["url"],
-                    "preview_url": attributes.get("previews", [{}])[0].get("url") if attributes.get("previews") else None,
-                    "artwork_url": AppleMusicService.standardize_artwork_url(artwork_url),
+                    "url": song["attributes"]["url"],
+                    "preview_url": song["attributes"].get("previews", [{}])[0].get("url") if song["attributes"].get("previews") else None,
+                    "artwork_url": AppleMusicService.standardize_artwork_url(artwork_url)
                 }
-                
-                # Add important song details
-                if attributes.get("durationInMillis"):
-                    result["duration_in_millis"] = attributes["durationInMillis"]
-                
-                if attributes.get("isrc"):
-                    result["isrc"] = attributes["isrc"]
-                
-                if attributes.get("releaseDate"):
-                    result["release_date"] = attributes["releaseDate"]
-                
-                # Add GENRES (new)
-                if attributes.get("genreNames"):
-                    result["genres"] = attributes["genreNames"]
-                
-                # Add COMPOSERS (new)
-                if attributes.get("composerName"):
-                    result["composers"] = attributes["composerName"].split(", ")
-                
-                # Add LYRICISTS (new)
-                if attributes.get("artistName") and attributes.get("composerName") != attributes.get("artistName"):
-                    result["lyricists"] = attributes.get("artistName").split(", ")
-                
-                # Add album information if available
-                if "relationships" in song and "albums" in song["relationships"] and song["relationships"]["albums"]["data"]:
-                    album_data = song["relationships"]["albums"]["data"][0]
-                    album = album_data["attributes"]
-                    
-                    # Enhanced album information
-                    result["album"] = {
-                        "id": album_data.get("id"),
-                        "name": album.get("name"),
-                        "artist": album.get("artistName"),
-                        "url": album.get("url"),
-                        "record_label": album.get("recordLabel"),
-                        "release_date": album.get("releaseDate"),
-                        "track_count": album.get("trackCount"),
-                        "copyright": album.get("copyright"),
-                        "editorial_notes": album.get("editorialNotes", {}).get("standard")
-                    }
-                    
-                    # Add album genres (new)
-                    if album.get("genreNames"):
-                        result["album"]["genres"] = album["genreNames"]
-                    
-                    # Add album artwork if available
-                    if album.get("artwork", {}).get("url"):
-                        result["album"]["artwork_url"] = AppleMusicService.standardize_artwork_url(
-                            album["artwork"]["url"]
-                        )
-                
-                # Add artist information if available (new)
-                if "relationships" in song and "artists" in song["relationships"] and song["relationships"]["artists"]["data"]:
-                    artist_data = song["relationships"]["artists"]["data"][0]
-                    artist_attributes = artist_data["attributes"]
-                    
-                    result["artist_info"] = {
-                        "id": artist_data.get("id"),
-                        "name": artist_attributes.get("name"),
-                        "url": artist_attributes.get("url"),
-                        "genres": artist_attributes.get("genreNames")
-                    }
-                    
-                    # Add artist artwork if available
-                    if artist_attributes.get("artwork", {}).get("url"):
-                        result["artist_info"]["artwork_url"] = AppleMusicService.standardize_artwork_url(
-                            artist_attributes["artwork"]["url"]
-                        )
             
             # Cache results for 24 hours
             cache.set(cache_key, result, timeout=24*60*60)
@@ -235,7 +164,7 @@ class AppleMusicService:
             logger.error(f"Error searching Apple Music: {e}")
             # Cache failures briefly to prevent immediate retries
             cache.set(cache_key, None, timeout=300)
-            return None
+            return None    
     
     @staticmethod
     def enrich_chart_data(data):
@@ -294,6 +223,7 @@ class AppleMusicService:
             logger.error(f"Error enriching chart data with Apple Music: {e}")
             
         return data
+
 # ================= Billboard API Route =================
 
 @billboard_bp.route('/billboard_api.php')
