@@ -1,3 +1,4 @@
+// frontend/src/services/api.ts
 import axios from "axios";
 import type { ChartData } from "@/utils/types";
 
@@ -10,17 +11,20 @@ const BASE_URL = import.meta.env.DEV
  * Fetch chart data from the API
  * @param chartId - ID of the chart to fetch
  * @param week - Optional date string for specific week
+ * @param includeAppleMusic - Whether to include Apple Music data
  * @param refresh - Force refresh from source
  * @returns Promise with chart data
  */
 export async function fetchChartData(
   chartId: string,
   week?: string,
+  includeAppleMusic = true,
   refresh = false
 ): Promise<ChartData> {
   // Prepare query parameters
   const params: Record<string, string | boolean> = {
     id: chartId,
+    apple_music: includeAppleMusic,
   };
 
   // Add week parameter if provided

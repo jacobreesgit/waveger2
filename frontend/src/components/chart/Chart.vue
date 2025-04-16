@@ -121,9 +121,9 @@ function handleVolumeChange(newVolume: number) {
 <template>
   <div class="chart-container h-full w-full">
     <div class="chart-view w-full">
-      <!-- Chart Header - Skeleton when loading -->
+      <!-- Chart Header - Skeleton when loading basic data -->
       <div
-        v-if="chartStore.isLoading"
+        v-if="chartStore.isLoadingBasic || !chartStore.chartData"
         class="chart-view__chart-header p-6 flex flex-col items-center gap-2 mb-6 bg-gradient-to-r from-indigo-700 to-purple-700 text-white rounded-lg"
       >
         <Skeleton width="300px" height="36px" />
@@ -131,9 +131,9 @@ function handleVolumeChange(newVolume: number) {
         <Skeleton width="140px" height="24px" class="mt-2" />
       </div>
 
-      <!-- Chart Header - Actual content when loaded -->
+      <!-- Chart Header - Actual content when basic data is loaded -->
       <div
-        v-else-if="chartStore.chartData"
+        v-else
         class="chart-view__chart-header p-6 flex flex-col items-center gap-2 mb-6 bg-gradient-to-r from-indigo-700 to-purple-700 text-white rounded-lg"
       >
         <h1 class="text-3xl font-bold">{{ chartStore.chartData.title }}</h1>
@@ -162,7 +162,7 @@ function handleVolumeChange(newVolume: number) {
               v-model="searchQuery"
               placeholder="Search songs or artists"
               class="w-full pl-10"
-              :disabled="chartStore.isLoading"
+              :disabled="chartStore.isLoadingBasic || !chartStore.chartData"
             />
           </span>
         </div>
@@ -170,9 +170,9 @@ function handleVolumeChange(newVolume: number) {
 
       <!-- Cards Grid View -->
       <div class="flex flex-wrap gap-4 justify-center">
-        <!-- Skeleton Cards when loading -->
+        <!-- Basic Skeleton Loading: Shown when no data is available -->
         <div
-          v-if="chartStore.isLoading"
+          v-if="chartStore.isLoadingBasic || !chartStore.chartData"
           v-for="n in 12"
           :key="`skeleton-${n}`"
           class="chart-card-container w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1rem)] xl:w-[calc(25%-1rem)]"
@@ -195,18 +195,20 @@ function handleVolumeChange(newVolume: number) {
           />
         </div>
 
-        <!-- Actual Cards when data is loaded -->
+        <!-- Card View: Either default or enriched -->
         <div
           v-else
           v-for="song in filteredSongs"
-          :key="song.position"
+          :key="`card-${song.position}`"
           class="chart-card-container w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1rem)] xl:w-[calc(25%-1rem)]"
         >
+          <!-- Normal cards if we have basic data -->
           <ChartCard
             :song="song"
             :flipped="flippedCards[song.position] || false"
             :playing-track-id="playingTrackId"
             :audio-info="getAudioInfo(song.position)"
+            :loading="!chartStore.hasEnrichedData"
             @flip="toggleFlip"
             @favorite="toggleFavorite"
             @play="playPreview"

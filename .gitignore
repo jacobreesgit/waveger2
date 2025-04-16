@@ -68,3 +68,6 @@ Thumbs.db
 # Apple Music private keys
 *.p8
 backend/keys/
+
+# Testing
+# test_output.txt
