@@ -25,6 +25,10 @@ const maxCardHeight = ref(0);
 const searchQuery = ref("");
 const fuse = ref<Fuse<Song> | null>(null);
 
+// Track revealed cards for sequential loading
+const revealedCards = ref<number[]>([]);
+const isSequencing = ref(false);
+
 // Update Fuse instance when chart data changes
 watch(
   () => chartStore.chartData,
@@ -63,22 +67,108 @@ const filteredSongs = computed(() => {
   return [];
 });
 
+// Determine if a specific card should be shown based on its position
+function isCardRevealed(position: number): boolean {
+  return revealedCards.value.includes(position);
+}
+
+// Function to sequentially reveal cards
+function sequentiallyRevealCards() {
+  if (isSequencing.value) return;
+  isSequencing.value = true;
+
+  // Reset revealed cards when starting a new sequence
+  revealedCards.value = [];
+
+  if (!chartStore.chartData?.songs?.length) {
+    isSequencing.value = false;
+    return;
+  }
+
+  // Get positions sorted by chart ranking
+  const positions = [...chartStore.chartData.songs]
+    .sort((a, b) => a.position - b.position)
+    .map((song) => song.position);
+
+  // Reveal cards one by one with a delay
+  let currentIndex = 0;
+  const revealNextCard = () => {
+    if (currentIndex < positions.length) {
+      revealedCards.value.push(positions[currentIndex]);
+      currentIndex++;
+      setTimeout(revealNextCard, 500); // 500ms delay between each card
+    } else {
+      isSequencing.value = false;
+    }
+  };
+
+  revealNextCard();
+}
+
 // Watch for chart data changes and update card heights
 watch(
   () => chartStore.chartData,
-  async () => {
-    if (chartStore.chartData) {
+  async (newData, oldData) => {
+    if (newData) {
+      // Reset revealed cards when loading a new chart
+      if (
+        !oldData ||
+        oldData.title !== newData.title ||
+        oldData.week !== newData.week
+      ) {
+        revealedCards.value = [];
+      }
+
       await nextTick();
+
       // Allow time for images to load
       setTimeout(updateCardHeights, 100);
+
+      // Start sequential loading if we have songs and no cards are revealed yet
+      if (
+        newData.songs &&
+        newData.songs.length > 0 &&
+        revealedCards.value.length === 0
+      ) {
+        sequentiallyRevealCards();
+      }
     }
   },
   { immediate: true }
 );
 
-// Reset flipped cards when chart changes
+// Watch for enriched data and loading states
+watch(
+  [
+    () => chartStore.hasEnrichedData,
+    () => chartStore.isLoadingBasic,
+    () => chartStore.isLoadingEnriched,
+  ],
+  ([hasEnriched, isLoadingBasic, isLoadingEnriched]) => {
+    // Update card heights after enrichment
+    if (hasEnriched) {
+      nextTick(() => {
+        setTimeout(updateCardHeights, 100);
+      });
+    }
+
+    // If we've just finished loading (either basic or enriched) and no cards are revealed yet
+    if (
+      !isLoadingBasic &&
+      !isLoadingEnriched &&
+      chartStore.chartData?.songs &&
+      revealedCards.value.length === 0
+    ) {
+      sequentiallyRevealCards();
+    }
+  },
+  { deep: true }
+);
+
+// Reset state when chart or date changes
 watch([() => chartStore.chartId, () => chartStore.selectedDate], () => {
   flippedCards.value = {};
+  revealedCards.value = [];
 });
 
 // Setup event listeners and audio context
@@ -121,6 +211,21 @@ function toggleFavorite(position: number) {
 function handleVolumeChange(newVolume: number) {
   volume.value = newVolume;
 }
+
+// Reset sequencing and reveal all cards at once (for search)
+watch(searchQuery, () => {
+  if (searchQuery.value.trim() && chartStore.chartData?.songs) {
+    // When searching, reveal all cards immediately
+    revealedCards.value = chartStore.chartData.songs.map(
+      (song) => song.position
+    );
+  } else if (!isSequencing.value && chartStore.chartData?.songs) {
+    // If returning to no search, still show all cards
+    revealedCards.value = chartStore.chartData.songs.map(
+      (song) => song.position
+    );
+  }
+});
 </script>
 
 <template>
@@ -132,8 +237,8 @@ function handleVolumeChange(newVolume: number) {
         class="chart-view__chart-header p-6 flex flex-col items-center gap-2 mb-6 bg-gradient-to-r from-indigo-700 to-purple-700 text-white rounded-lg"
       >
         <Skeleton width="300px" height="36px" />
-        <Skeleton width="80%" height="20px" class="mt-1" />
-        <Skeleton width="140px" height="24px" class="mt-2" />
+        <Skeleton width="80%" height="60px" class="mt-1" />
+        <Skeleton width="140px" height="32px" class="mt-2" />
       </div>
 
       <!-- Chart Header - Actual content when basic data is loaded -->
@@ -207,8 +312,28 @@ function handleVolumeChange(newVolume: number) {
           :key="`card-${song.position}-${chartStore.chartId}-${chartStore.selectedDate}`"
           class="chart-card-container w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1rem)] xl:w-[calc(25%-1rem)]"
         >
-          <!-- Normal cards if we have basic data -->
+          <!-- Skeleton cards while loading or not yet revealed -->
           <ChartCard
+            v-if="!isCardRevealed(song.position)"
+            :song="{
+              position: song.position,
+              name: '',
+              artist: '',
+              image: '',
+              last_week_position: 0,
+              peak_position: 0,
+              weeks_on_chart: 0,
+              url: '',
+            }"
+            :flipped="false"
+            :playing-track-id="null"
+            :audio-info="{ progress: 0 }"
+            :loading="true"
+          />
+
+          <!-- Actual cards once revealed -->
+          <ChartCard
+            v-else
             :song="song"
             :flipped="flippedCards[song.position] || false"
             :playing-track-id="playingTrackId"
