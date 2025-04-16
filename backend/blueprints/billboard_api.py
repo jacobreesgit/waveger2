@@ -84,7 +84,7 @@ class AppleMusicService:
         except Exception as e:
             logger.error(f"Error generating Apple Music token: {e}")
             return None
-    
+        
     @staticmethod
     def standardize_artwork_url(url):
         """
@@ -92,16 +92,15 @@ class AppleMusicService:
         
         Args:
             url (str): The artwork URL to standardize
-            
+                
         Returns:
             str: Standardized artwork URL with 1000x1000 dimensions
         """
         if not url:
             return url
             
-        # Simple replacement of any size with 1000x1000
-        # This pattern matches URLs like "https://...300x300bb.jpg"
-        return re.sub(r'/\d+x\d+bb\.jpg', '/1000x1000bb.jpg', url)
+        # Replace {w}x{h} placeholders with 1000x1000
+        return url.replace("{w}x{h}bb.jpg", "1000x1000bb.jpg")
     
     @staticmethod
     def search_song(title, artist):

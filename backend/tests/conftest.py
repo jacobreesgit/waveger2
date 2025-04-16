@@ -4,6 +4,7 @@ import sys
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
+from urllib.parse import urlparse, urlunparse
 
 # Add the parent directory to the Python path so tests can import modules from backend
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -45,27 +46,20 @@ def load_test_env():
         logger.warning(f"Missing environment variables: {', '.join(missing)}")
 
 @pytest.fixture(scope="session", autouse=True)
-def configure_redis():
+def configure_cache():
     """
-    Configure Redis to use a separate database for testing.
-    Uses database number 15 to avoid conflicts with development/production.
+    Configure caching for tests - use SimpleCache for tests instead of Redis.
+    This avoids issues with Redis connection and makes tests more reliable.
     """
+    logger.info("Using SimpleCache for tests")
+    os.environ['CACHE_TYPE'] = 'SimpleCache'
+    
+    # Log the original Redis URL for reference
     redis_url = os.getenv('REDIS_URL')
-    if not redis_url:
-        logger.warning("REDIS_URL not set")
-        return
-        
-    # Ensure we're using a test-specific Redis database
-    if '/' in redis_url:
-        # URL has a path component
-        base_url = redis_url.rsplit('/', 1)[0]
-        test_url = f"{base_url}/15"
+    if redis_url:
+        logger.info(f"Original REDIS_URL: {redis_url}")
     else:
-        # URL has no path component
-        test_url = f"{redis_url}/15"
-        
-    os.environ['REDIS_URL'] = test_url
-    logger.info(f"Using test Redis database: {test_url}")
+        logger.warning("REDIS_URL not set")
 
 @pytest.fixture
 def sample_chart_data():

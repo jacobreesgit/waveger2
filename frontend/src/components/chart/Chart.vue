@@ -5,6 +5,8 @@ import LoadingSpinner from "@/components/ui/LoadingSpinner.vue";
 import ChartCard from "@/components/chart/ChartCard.vue";
 import InputText from "primevue/inputtext";
 import { useAudio } from "@/composables/useAudio";
+import Fuse from "fuse.js";
+import type { Song } from "@/utils/types";
 
 const chartStore = useChartStore();
 
@@ -21,6 +23,26 @@ const maxCardHeight = ref(0);
 
 // Filter and search
 const searchQuery = ref("");
+const fuse = ref<Fuse<Song> | null>(null);
+
+// Update Fuse instance when chart data changes
+watch(
+  () => chartStore.chartData,
+  () => {
+    if (chartStore.chartData?.songs) {
+      fuse.value = new Fuse(chartStore.chartData.songs, {
+        keys: ["name", "artist"],
+        threshold: 0.4, // Lower value = stricter matching
+        distance: 100,
+        minMatchCharLength: 2,
+        shouldSort: true, // Sort by relevance
+      });
+    } else {
+      fuse.value = null;
+    }
+  },
+  { immediate: true }
+);
 
 // Computed for filtered songs based on search query
 const filteredSongs = computed(() => {
@@ -28,12 +50,14 @@ const filteredSongs = computed(() => {
     return chartStore.chartData?.songs || [];
   }
 
-  const query = searchQuery.value.toLowerCase().trim();
-  return chartStore.chartData.songs.filter(
-    (song) =>
-      song.name.toLowerCase().includes(query) ||
-      song.artist.toLowerCase().includes(query)
-  );
+  // Use Fuse.js for fuzzy searching
+  if (fuse.value) {
+    const results = fuse.value.search(searchQuery.value.trim());
+    return results.map((result) => result.item);
+  }
+
+  // Return empty array if Fuse isn't initialized (should not happen in practice)
+  return [];
 });
 
 // Watch for chart data changes and update card heights
