@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
 import { useRouter } from "vue-router";
 import Button from "primevue/button";
 

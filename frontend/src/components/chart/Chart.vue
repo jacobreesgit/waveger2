@@ -132,6 +132,7 @@ function handleVolumeChange(newVolume: number) {
     >
       <!-- Chart Header -->
       <div
+        v-if="chartStore.chartData"
         class="chart-view__chart-header p-6 flex flex-col items-center gap-2 mb-6 bg-gradient-to-r from-indigo-700 to-purple-700 text-white rounded-lg"
       >
         <h1 class="text-3xl font-bold">{{ chartStore.chartData.title }}</h1>
@@ -151,7 +152,7 @@ function handleVolumeChange(newVolume: number) {
         class="chart-controls mb-6 flex flex-col sm:flex-row gap-3 items-start sm:items-center"
       >
         <!-- Search Box -->
-        <div class="search-box flex-grow">
+        <div class="search-box flex-grow w-full">
           <span class="p-input-icon-left w-full relative">
             <i
               class="pi pi-search absolute left-3 top-1/2 transform -translate-y-1/2 z-10 text-gray-500"
