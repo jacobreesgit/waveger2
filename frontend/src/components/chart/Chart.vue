@@ -32,7 +32,7 @@ watch(
     if (chartStore.chartData?.songs) {
       fuse.value = new Fuse(chartStore.chartData.songs, {
         keys: ["name", "artist"],
-        threshold: 0.4, // Lower value = stricter matching
+        threshold: 0.1, // Lower value = stricter matching
         distance: 100,
         minMatchCharLength: 2,
         shouldSort: true, // Sort by relevance
@@ -53,7 +53,10 @@ const filteredSongs = computed(() => {
   // Use Fuse.js for fuzzy searching
   if (fuse.value) {
     const results = fuse.value.search(searchQuery.value.trim());
-    return results.map((result) => result.item);
+    // Sort results by chart position after fuzzy search
+    return results
+      .map((result) => result.item)
+      .sort((a, b) => a.position - b.position);
   }
 
   // Return empty array if Fuse isn't initialized (should not happen in practice)
@@ -186,34 +189,6 @@ function handleVolumeChange(newVolume: number) {
 </template>
 
 <style lang="scss" scoped>
-/* Flip animation for PrimeVue transition */
-.p-flip-enter-active {
-  animation: p-flip-in 0.5s;
-}
-.p-flip-leave-active {
-  animation: p-flip-out 0.5s;
-}
-@keyframes p-flip-in {
-  0% {
-    transform: rotateY(90deg);
-    opacity: 0;
-  }
-  100% {
-    transform: rotateY(0deg);
-    opacity: 1;
-  }
-}
-@keyframes p-flip-out {
-  0% {
-    transform: rotateY(0deg);
-    opacity: 1;
-  }
-  100% {
-    transform: rotateY(90deg);
-    opacity: 0;
-  }
-}
-
 .chart-card-container {
   position: relative;
   perspective: 1500px;
